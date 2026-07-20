@@ -1,0 +1,6 @@
+# GitHub Pages 免费账号只能用公开仓库，个人数据一律不进版本库
+.claude/
+*.json
+!manifest.json
+一日一页-数据.json
+一日一页-备份-*.json

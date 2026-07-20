@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>我的一天</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f1eee6; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f1eee6; z-index: 9999; }
+    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    #__bundler_placeholder { color: #999; font-size: 14px; }
+  </style>
+  <noscript>
+    <style>#__bundler_loading { display: none; }</style>
+    <div style="position:fixed;bottom:12px;left:12px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#999;background:rgba(255,255,255,0.9);padding:6px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);z-index:10000;">
+      This page requires JavaScript to display.
+    </div>
+  </noscript>
+</head>
+<body>
+  <div id="__bundler_thumbnail">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <rect x="34" y="18" width="52" height="44" rx="6" fill="#ffffff" stroke="#e4e0d3"></rect>
+    <rect x="34" y="18" width="4" height="44" rx="2" fill="#40745a"></rect>
+    <rect x="46" y="28" width="30" height="5" rx="2.5" fill="#40745a"></rect>
+    <rect x="46" y="39" width="24" height="5" rx="2.5" fill="#b06f24"></rect>
+    <rect x="46" y="50" width="18" height="5" rx="2.5" fill="#bab4a4"></rect>
+  </svg>
+</div>
+  <div id="__bundler_loading">Unpacking...</div>
+
+  <script>
+    
+document.addEventListener('DOMContentLoaded', async function() {
+  const loading = document.getElementById('__bundler_loading');
+  function setStatus(msg) { if (loading) loading.textContent = msg; }
+
+  const FONT_MIME = /^(font[/]|application[/](x-)?font-|application[/]vnd\.ms-fontobject)/i;
+  const MIME_TOKEN = /^[\w.+-]+[/][\w.+-]+$/;
+  function toBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  // Error sink persists across replaceWith since it's on window, not the DOM.
+  window.addEventListener('error', function(e) {
+    // Failed resource loads (CSP-blocked links, scripts, images) fire plain
+    // events at the element — warn only; real JS errors carry message/error.
+    if (!e.message && !e.error && e.target && e.target !== window) {
+      console.warn('[bundle] resource failed to load:',
+        e.target.tagName, String(e.target.src || e.target.href || ''));
+      return;
+    }
+    var p = document.body || document.documentElement;
+    var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
+    d.id = '__bundler_err';
+    d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
+      '[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+  }, true);
+
+  try {
+    const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
+    const templateEl = document.querySelector('script[type="__bundler/template"]');
+    if (!manifestEl || !templateEl) {
+      setStatus('Error: missing bundle data');
+      console.error('[bundler] Missing script tags — manifestEl:', !!manifestEl, 'templateEl:', !!templateEl);
+      return;
+    }
+
+    const manifest = JSON.parse(manifestEl.textContent);
+    let template = JSON.parse(templateEl.textContent);
+
+    // Nested page bundles (iframe targets). Each ships ONCE, in the ROOT
+    // document's manifest; frame srcs carry an about:blank#<uuid> marker
+    // instead of a substitutable uuid. Every document mints the blobs for
+    // its OWN frames — from local text at the root, or text obtained from
+    // its DIRECT parent over the relay protocol below — so each frame
+    // navigation stays same-origin with its initiator and a deduped page
+    // loads at any depth on any host, including a file:// download's
+    // opaque origins (where a blob minted by one document cannot be
+    // navigated to by another).
+    const pageOrderEl = document.querySelector('script[type="__bundler/page_order"]');
+    const pageOrder = pageOrderEl ? JSON.parse(pageOrderEl.textContent) : [];
+    const pageSet = new Set(pageOrder);
+    const pageTexts = {};
+
+    // ── Nested-page text protocol (parent-chain relay) ──
+    // Page bundles ship once, in the ROOT document's manifest. Every
+    // document mints the blobs for its OWN frames, obtaining page text
+    // through a strict parent-chain relay: a document only ever SENDS to
+    // its direct parent (which, for every document the publisher's own
+    // runtime minted, is another publisher document) and only ACCEPTS
+    // text from that direct parent; requests from below are honored only
+    // for the document's own child frames, and the ROOT never sends
+    // upward at all. That last rule is load-bearing: the artifact host's
+    // frame-ancestors allows claude.ai (and friends) to frame an
+    // artifact, so window.top can be a FOREIGN document — a top-addressed
+    // protocol would hand page uuids to that ancestor and accept forged
+    // "page text" from it, minting attacker HTML as an artifact-origin
+    // blob document. The chain never touches the ancestor: requests stop
+    // at the root, replies are origin-addressed per hop (never '*' when
+    // an origin exists), and both directions are origin-gated (on https
+    // a foreign sender's origin can never equal this document's; in
+    // opaque contexts — file:// — everything serializes as 'null', where
+    // an embedded EXTERNAL frame still fails the gate by carrying its
+    // own real origin, and a sandboxed child of such a frame is excluded
+    // by the own-child-frames check plus uuid unguessability). Shape is
+    // deny-by-default: one request form, one reply form, no error
+    // replies.
+    // window.origin is the SERIALIZED SECURITY origin ('null' in opaque
+    // contexts such as a sandboxed preview iframe) — location.origin is
+    // computed from the URL and stays 'https://…' even when the document
+    // is sandboxed, which would misgate every opaque chain.
+    const OWN_TARGET = /^https?:[/][/]/.test(window.origin || '')
+      ? window.origin
+      : '*';
+    function trustedOrigin(e) {
+      if (e.origin === window.origin) return true; // https chains; opaque==opaque
+      // file:// trees: Chrome serializes the file document's origin as
+      // 'file://' while the blob: documents it mints serialize as 'null',
+      // so the two legitimate shapes can never string-match — accept the
+      // pair in both directions. https origins never serialize as either,
+      // and sender identity (own child frame / direct parent) is checked
+      // separately.
+      return (
+        (e.origin === 'null' &&
+          (window.origin === 'file://' ||
+            window.location.protocol === 'file:')) ||
+        (/^file:/.test(e.origin) && window.origin === 'null')
+      );
+    }
+    // Non-empty only in the root document (nested bundles ship an empty
+    // island), so it doubles as the root marker: the root answers from
+    // local text and treats a miss as authoritative — never relaying to
+    // its (possibly foreign) parent.
+    const isPageRoot = pageOrder.length > 0;
+    const blobUrls = {};
+    const resourceBlobs = {};
+    const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const pendingFrames = {}; // uuid -> [{el, frag}] awaiting text for own frames
+    const pendingRelays = {}; // uuid -> [childWindow] awaiting text to pass down
+    function mountPage(el, frag, text) {
+      const pageBlob = new Blob([text], { type: 'text/html' });
+      const u = URL.createObjectURL(pageBlob);
+      resourceBlobs[u] = pageBlob;
+      el.src = u + frag;
+    }
+    function deliverPage(uuid, text) {
+      const frames = pendingFrames[uuid];
+      delete pendingFrames[uuid];
+      if (frames) for (const f of frames) mountPage(f.el, f.frag, text);
+      const relays = pendingRelays[uuid];
+      delete pendingRelays[uuid];
+      if (relays) {
+        for (const cw of relays) {
+          try { cw.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+        }
+      }
+    }
+    function ownFrameWindows() {
+      const out = [];
+      for (const f of Array.from(document.querySelectorAll('iframe'))) {
+        try { if (f.contentWindow) out.push(f.contentWindow); } catch (err) { /* detached */ }
+      }
+      return out;
+    }
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (!d || typeof d !== 'object' || !e.source) return;
+      // Origin gate first; the structural checks below (own-child-frames
+      // for requests, direct-parent + solicited-uuid for replies, the
+      // root's never-relay rule) are what hold in fully opaque chains
+      // where origin strings can't discriminate — a sandboxed root's
+      // FOREIGN wrapper still fails all three even though both serialize
+      // as real-vs-'null' rather than matching.
+      if (!trustedOrigin(e)) return;
+      if (typeof d.__bundler_need === 'string' && UUID_SHAPE.test(d.__bundler_need)) {
+        // Requests are honored only for this document's own child frames.
+        if (ownFrameWindows().indexOf(e.source) < 0) return;
+        const uuid = d.__bundler_need;
+        const text = pageTexts[uuid];
+        if (typeof text === 'string') {
+          try { e.source.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+          return;
+        }
+        if (isPageRoot || window.parent === window) return; // authoritative miss
+        const waiting = pendingRelays[uuid];
+        if (waiting) {
+          if (waiting.indexOf(e.source) < 0) waiting.push(e.source);
+          return;
+        }
+        // Never-answered uuids would otherwise accumulate forever under a
+        // request spray; past the cap (far above any real page count) new
+        // relays are dropped rather than remembered.
+        if (Object.keys(pendingRelays).length >= 128) return;
+        pendingRelays[uuid] = [e.source];
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      } else if (
+        typeof d.__bundler_page === 'string' &&
+        UUID_SHAPE.test(d.__bundler_page) &&
+        typeof d.__bundler_text === 'string'
+      ) {
+        // The shape test is load-bearing beyond tidiness: the solicited
+        // check below uses the in operator, which matches prototype keys
+        // ('__proto__', 'constructor') — an unshaped key would reach
+        // deliverPage and throw, painting the error banner.
+        // Text is accepted only from the direct parent — the document
+        // that minted this one.
+        if (e.source !== window.parent || window.parent === window) return;
+        if (!(d.__bundler_page in pendingFrames) && !(d.__bundler_page in pendingRelays)) return;
+        deliverPage(d.__bundler_page, d.__bundler_text);
+      }
+    });
+
+    const uuids = Object.keys(manifest);
+    setStatus('Unpacking ' + uuids.length + ' assets...');
+
+    await Promise.all(uuids.map(async (uuid) => {
+      const entry = manifest[uuid];
+      try {
+        const binaryStr = atob(entry.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        let finalBytes = bytes;
+        if (entry.compressed) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            const reader = ds.readable.getReader();
+            writer.write(bytes);
+            writer.close();
+            const chunks = [];
+            let totalLen = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              totalLen += value.length;
+            }
+            finalBytes = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const chunk of chunks) { finalBytes.set(chunk, offset); offset += chunk.length; }
+          } else {
+            console.warn('DecompressionStream not available, asset ' + uuid + ' may not render');
+          }
+        }
+
+        if (pageSet.has(uuid)) {
+          pageTexts[uuid] = new TextDecoder().decode(finalBytes);
+          return;
+        }
+        if (FONT_MIME.test(entry.mime) && MIME_TOKEN.test(entry.mime)) {
+          // Strict artifact hosts allow font-src data: but not blob:.
+          blobUrls[uuid] = 'data:' + entry.mime + ';base64,' +
+            (entry.compressed ? toBase64(finalBytes) : entry.data);
+        } else {
+          const blob = new Blob([finalBytes], { type: entry.mime });
+          blobUrls[uuid] = URL.createObjectURL(blob);
+          resourceBlobs[blobUrls[uuid]] = blob;
+        }
+      } catch (err) {
+        console.error('Failed to decode asset ' + uuid + ':', err);
+        const blob = new Blob([], { type: entry.mime });
+        blobUrls[uuid] = URL.createObjectURL(blob);
+        resourceBlobs[blobUrls[uuid]] = blob;
+      }
+    }));
+
+    const extResEl = document.querySelector('script[type="__bundler/ext_resources"]');
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    // Artifact-host CSP (connect-src 'self') refuses fetch() of blob: URLs —
+    // consumers read these Blobs directly. Survives the swap like the error sink.
+    window.__resourceBlobs = resourceBlobs;
+
+    setStatus('Rendering...');
+    // Page uuids have no blob here — they ride inside about:blank#<uuid>
+    // frame markers the pass below resolves after the swap.
+    for (const uuid of uuids) {
+      if (pageSet.has(uuid)) continue;
+      template = template.split(uuid).join(blobUrls[uuid]);
+    }
+
+    // Strip integrity + crossorigin — blob URLs from a file:// document inherit
+    // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
+    // The manifest bytes are ours; SRI protects against CDN compromise, not this.
+    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+
+    const resourceScript = '<script>window.__resources = ' +
+      JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
+      ';</' + 'script>';
+    // Inject after <head> so the DOCTYPE stays first; prepending the script
+    // would push the parser into quirks mode. DOMParser always emits a <head>
+    // (synthesizing one if the source HTML omitted it) but may carry
+    // attributes through, so match the full opening tag. slice() rather than
+    // replace() keeps us clear of $-pattern substitution in resourceScript.
+    const headOpen = template.match(/<head[^>]*>/i);
+    if (headOpen) {
+      const i = headOpen.index + headOpen[0].length;
+      template = template.slice(0, i) + resourceScript + template.slice(i);
+    }
+
+    // Parse the template and swap the root element. Scripts inserted via
+    // DOMParser/replaceWith are inert per spec — re-create each with
+    // createElement so they execute, awaiting onload for src scripts to
+    // preserve ordering (React before ReactDOM before Babel before text/babel).
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    document.documentElement.replaceWith(doc.documentElement);
+
+    // Resolve page-frame markers: mint this document's own blob for each
+    // framed page — from local text when this is the root, otherwise by
+    // asking the direct parent over the relay protocol above. An
+    // unanswered request leaves the frame on about:blank, the same
+    // degraded state as a refused embed.
+    {
+      const MARKER = /^about:blank#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(#.*)?$/;
+      const needed = [];
+      for (const el of Array.from(document.querySelectorAll('iframe'))) {
+        const m = MARKER.exec(el.getAttribute('src') || '');
+        if (!m) continue;
+        const text = pageTexts[m[1]];
+        if (typeof text === 'string') {
+          mountPage(el, m[2] || '', text);
+        } else if (window.parent !== window && !isPageRoot) {
+          const had = pendingFrames[m[1]];
+          (pendingFrames[m[1]] = had || []).push({ el: el, frag: m[2] || '' });
+          if (!had) needed.push(m[1]);
+        }
+      }
+      for (const uuid of needed) {
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      }
+    }
+
+    const dead = Array.from(document.scripts);
+    for (const old of dead) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      // text/babel scripts with a src: read and inline. transformScriptTags
+      // does XHR against the src, but blob:null/ from a file:// origin is
+      // silently dropped. Inlining makes it a plain inline babel script,
+      // which transformScriptTags handles unconditionally.
+      if ((s.type === 'text/babel' || s.type === 'text/jsx') && s.src) {
+        const pre = resourceBlobs[s.src.split('#')[0]];
+        s.textContent = pre ? await pre.text() : await (await fetch(s.src)).text();
+        s.removeAttribute('src');
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+      window.Babel.transformScriptTags();
+    }
+  } catch (err) {
+    setStatus('Error unpacking: ' + err.message);
+    console.error('Bundle unpack error:', err);
+  }
+});
+
+  </script>
+
+  <script type="__bundler/manifest">
+{}
+  </script>
+
+  <script type="__bundler/ext_resources">
+[]
+  </script>
+
+  <script type="__bundler/page_order">
+[]
+  </script>
+
+  <script type="__bundler/template">
+"<!DOCTYPE html>\n<html lang=\"zh-CN\"><head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>我的一天<\u002Ftitle>\n\n<style>\n  :root {\n    --bg: #f1eee6;\n    --panel: #faf9f4;\n    --card: #ffffff;\n    --ink: #2a2820;\n    --ink-soft: #8f897a;\n    --ink-faint: #bab4a4;\n    --line: #e4e0d3;\n    --line-soft: #edeadf;\n    --accent: #40745a;\n    --accent-deep: #315e47;\n    --accent-soft: #e3ece5;\n    --focus: #b06f24;\n    --focus-deep: #935912;\n    --focus-soft: #f7ecd8;\n    --focus-line: #e9d6b0;\n    --danger: #b5543b;\n    --now: #d84a37;\n    --block: #e9f0ea;\n    --block-border: #c9dbcf;\n    --done: #b3ad9e;\n    --radius: 10px;\n    --shadow-sm: 0 1px 2px rgba(57,50,33,.05);\n    --shadow-md: 0 2px 10px rgba(57,50,33,.09);\n    --shadow-lg: 0 12px 32px rgba(57,50,33,.16);\n    font-size: 15px;\n  }\n  * { box-sizing: border-box; margin: 0; padding: 0; }\n  html, body { height: 100%; }\n  body {\n    font-family: \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", system-ui, sans-serif;\n    background: var(--bg);\n    color: var(--ink);\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n    -webkit-font-smoothing: antialiased;\n  }\n  ::selection { background: var(--accent-soft); }\n  button, select, input { font-family: inherit; }\n\n  /* ---------- header ---------- */\n  header {\n    display: flex;\n    align-items: center;\n    gap: 18px;\n    padding: 12px 20px;\n    border-bottom: 1px solid var(--line);\n    background: var(--panel);\n    flex: none;\n    position: relative;\n    z-index: 10;\n    box-shadow: var(--shadow-sm);\n  }\n  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }\n  header h1::after {\n    content: \"\";\n    display: inline-block;\n    width: 6px; height: 6px;\n    border-radius: 50%;\n    background: var(--accent);\n    margin-left: 8px;\n    vertical-align: 3px;\n  }\n  .date-nav {\n    display: flex; align-items: center; gap: 2px;\n    background: var(--bg);\n    border: 1px solid var(--line);\n    border-radius: 999px;\n    padding: 3px;\n  }\n  .date-nav button {\n    border: none;\n    background: transparent;\n    border-radius: 999px;\n    padding: 4px 12px;\n    cursor: pointer;\n    font-size: 0.9rem;\n    line-height: 1.3;\n    color: var(--ink-soft);\n    transition: background .15s, color .15s, box-shadow .15s;\n  }\n  .date-nav button:hover { background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm); }\n  .date-nav .today-btn { color: var(--accent); font-weight: 600; }\n  .date-nav .today-btn:hover { color: var(--accent-deep); }\n  #dateLabel { font-size: 1.02rem; font-weight: 600; min-width: 200px; text-align: center; font-variant-numeric: tabular-nums; }\n  #dateLabel .weekday { color: var(--ink-soft); font-weight: 400; margin-left: 7px; font-size: 0.88rem; }\n  .spacer { flex: 1; }\n  .range-ctl { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 0.82rem; }\n  .range-ctl select {\n    border: 1px solid var(--line);\n    border-radius: 7px;\n    padding: 3px 6px;\n    background: var(--panel);\n    color: var(--ink);\n    font-size: 0.82rem;\n    cursor: pointer;\n    transition: border-color .15s;\n  }\n  .range-ctl select:hover { border-color: var(--ink-faint); }\n\n  /* ---------- layout ---------- */\n  main { flex: 1; display: flex; min-height: 0; }\n\n  /* ---------- left panel ---------- */\n  #left {\n    width: 330px;\n    flex: none;\n    display: flex;\n    flex-direction: column;\n    border-right: 1px solid var(--line);\n    background: var(--panel);\n    min-height: 0;\n  }\n  #left section { padding: 14px 16px; }\n  #left h2 {\n    font-size: 0.72rem;\n    letter-spacing: 0.14em;\n    color: var(--ink-soft);\n    font-weight: 700;\n    margin-bottom: 10px;\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n  #focusSection {\n    border-bottom: 1px solid var(--focus-line);\n    background: linear-gradient(180deg, #faf4e6, #f8f0e0);\n  }\n  #focusSection h2 { color: var(--focus-deep); }\n  #focusList { display: flex; flex-direction: column; gap: 7px; }\n  .focus-item {\n    display: flex;\n    align-items: center;\n    gap: 9px;\n    padding: 8px 10px;\n    background: var(--card);\n    border: 1px solid var(--focus-line);\n    border-radius: var(--radius);\n    font-weight: 500;\n    cursor: grab;\n    user-select: none;\n    box-shadow: var(--shadow-sm);\n    transition: border-color .15s, box-shadow .15s;\n  }\n  .focus-item:hover { border-color: #dcbf8b; box-shadow: var(--shadow-md); }\n  .focus-item:active { cursor: grabbing; }\n  .focus-item.done {\n    text-decoration: line-through;\n    color: var(--done);\n    font-weight: 400;\n    background: transparent;\n    border-color: var(--line-soft);\n    box-shadow: none;\n  }\n  .focus-empty { color: #a8996f; font-size: 0.84rem; padding: 6px 2px; line-height: 1.55; }\n  .focus-num {\n    color: #fff;\n    background: var(--focus);\n    font-weight: 700;\n    font-size: 0.72rem;\n    width: 18px; height: 18px;\n    border-radius: 50%;\n    display: flex; align-items: center; justify-content: center;\n    flex: none;\n    font-variant-numeric: tabular-nums;\n  }\n  .focus-item.done .focus-num { background: var(--done); }\n\n  #inboxSection { flex: 1; display: flex; flex-direction: column; min-height: 0; }\n  #addRow { display: flex; gap: 8px; margin-bottom: 12px; }\n  #addInput {\n    flex: 1;\n    border: 1px solid var(--line);\n    border-radius: var(--radius);\n    padding: 8px 12px;\n    font-size: 0.95rem;\n    background: var(--card);\n    color: var(--ink);\n    outline: none;\n    box-shadow: inset 0 1px 2px rgba(57,50,33,.04);\n    transition: border-color .15s, box-shadow .15s;\n  }\n  #addInput::placeholder { color: var(--ink-faint); }\n  #addInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }\n  #addBtn {\n    border: none;\n    background: var(--accent);\n    color: #fff;\n    border-radius: var(--radius);\n    padding: 0 15px;\n    font-size: 1.15rem;\n    cursor: pointer;\n    box-shadow: var(--shadow-sm);\n    transition: background .15s;\n  }\n  #addBtn:hover { background: var(--accent-deep); }\n  #addBtn:active { transform: translateY(1px); }\n  #todoList {\n    flex: 1;\n    overflow-y: auto;\n    display: flex;\n    flex-direction: column;\n    gap: 6px;\n    min-height: 0;\n    padding-right: 2px;\n    scrollbar-width: thin;\n    scrollbar-color: var(--line) transparent;\n  }\n  #todoList::-webkit-scrollbar, #doneList::-webkit-scrollbar { width: 8px; }\n  #todoList::-webkit-scrollbar-thumb, #doneList::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }\n  #todoList::-webkit-scrollbar-thumb:hover, #doneList::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }\n  .todo {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    padding: 8px 10px;\n    border: 1px solid var(--line-soft);\n    border-radius: var(--radius);\n    background: var(--card);\n    cursor: grab;\n    user-select: none;\n    box-shadow: var(--shadow-sm);\n    transition: border-color .15s, box-shadow .15s;\n  }\n  .todo:hover { border-color: var(--line); box-shadow: var(--shadow-md); }\n  .todo:active { cursor: grabbing; }\n  .todo.dragging, .focus-item.dragging { opacity: 0.35; }\n  #dropIndicator {\n    height: 0;\n    border-top: 2px solid var(--accent);\n    border-radius: 1px;\n    margin: -4px 0;\n    pointer-events: none;\n    position: relative;\n  }\n  #dropIndicator::before {\n    content: \"\";\n    position: absolute;\n    left: -1px; top: -4px;\n    width: 6px; height: 6px;\n    border-radius: 50%;\n    background: var(--accent);\n  }\n  .rename-input {\n    flex: 1;\n    min-width: 0;\n    border: 1px solid var(--accent);\n    border-radius: 6px;\n    padding: 2px 6px;\n    font: inherit;\n    color: var(--ink);\n    background: var(--card);\n    outline: none;\n    box-shadow: 0 0 0 3px var(--accent-soft);\n  }\n  .todo .title { flex: 1; word-break: break-all; line-height: 1.45; }\n  .todo.done .title { text-decoration: line-through; color: var(--done); }\n  .todo .tag {\n    font-size: 0.68rem;\n    font-weight: 600;\n    color: var(--focus-deep);\n    background: var(--focus-soft);\n    border-radius: 999px;\n    padding: 2px 8px;\n    flex: none;\n    font-variant-numeric: tabular-nums;\n  }\n  .todo .sched-tag { color: var(--accent-deep); background: var(--accent-soft); }\n  .icon-btn {\n    border: none;\n    background: none;\n    cursor: pointer;\n    font-size: 0.95rem;\n    color: var(--ink-faint);\n    padding: 2px 5px;\n    border-radius: 6px;\n    flex: none;\n    line-height: 1;\n    opacity: 0;\n    transition: opacity .12s, background .12s, color .12s;\n  }\n  .todo:hover .icon-btn, .focus-item:hover .icon-btn, .icon-btn.star-on { opacity: 1; }\n  .icon-btn:hover { background: var(--bg); color: var(--ink); }\n  .icon-btn.star-on { color: var(--focus); }\n  .icon-btn.star-on:hover { color: var(--focus-deep); background: var(--focus-soft); }\n  .check {\n    width: 18px; height: 18px;\n    border: 1.5px solid var(--ink-faint);\n    border-radius: 6px;\n    cursor: pointer;\n    flex: none;\n    display: flex; align-items: center; justify-content: center;\n    font-size: 11px;\n    color: transparent;\n    background: var(--card);\n    transition: background .15s, border-color .15s, color .15s;\n  }\n  .check:hover { border-color: var(--accent); }\n  .check.on { background: var(--accent); border-color: var(--accent); color: #fff; }\n  #doneSection { border-top: 1px solid var(--line); }\n  #doneHeader { cursor: pointer; user-select: none; transition: color .15s; }\n  #doneHeader:hover { color: var(--ink); }\n  #doneHeader .count {\n    color: var(--ink-soft);\n    font-weight: 600;\n    background: var(--bg);\n    border: 1px solid var(--line-soft);\n    border-radius: 999px;\n    padding: 1px 7px;\n    font-size: 0.7rem;\n    letter-spacing: 0;\n  }\n  #doneList { display: none; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }\n  #doneList.open { display: flex; }\n  #doneList .todo { box-shadow: none; background: transparent; border-color: transparent; }\n  #doneList .todo:hover { background: var(--card); border-color: var(--line-soft); }\n  #clearDone {\n    margin-left: auto;\n    font-size: 0.72rem;\n    letter-spacing: normal;\n    color: var(--ink-faint);\n    background: none;\n    border: none;\n    cursor: pointer;\n    padding: 2px 7px;\n    border-radius: 5px;\n    transition: color .15s, background .15s;\n  }\n  #clearDone:hover { color: var(--danger); background: #f6e8e2; }\n  .hint { font-size: 0.75rem; color: var(--ink-faint); padding: 10px 2px 0; line-height: 1.6; }\n\n  /* ---------- timeline ---------- */\n  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px 20px 16px; }\n  #timeline {\n    flex: 1;\n    position: relative;\n    min-height: 0;\n    border-radius: var(--radius);\n  }\n  .hour-row {\n    position: absolute;\n    left: 0; right: 0;\n    border-top: 1px solid var(--line);\n    display: flex;\n  }\n  .hour-row .hlabel {\n    width: 48px;\n    flex: none;\n    font-size: 0.7rem;\n    font-weight: 500;\n    font-variant-numeric: tabular-nums;\n    color: var(--ink-faint);\n    transform: translateY(-55%);\n    background: var(--bg);\n    padding-right: 10px;\n    text-align: right;\n  }\n  .half-line {\n    position: absolute;\n    left: 48px; right: 0;\n    border-top: 1px dashed var(--line-soft);\n  }\n  #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; }\n  #nowLine {\n    position: absolute;\n    left: 40px; right: 0;\n    border-top: 2px solid var(--now);\n    z-index: 5;\n    pointer-events: none;\n  }\n  #nowLine::before {\n    content: \"\";\n    position: absolute;\n    left: -5px; top: -5px;\n    width: 8px; height: 8px;\n    border-radius: 50%;\n    background: var(--now);\n    box-shadow: 0 0 0 3px rgba(216,74,55,.14);\n  }\n  .block {\n    position: absolute;\n    left: 0;\n    background: linear-gradient(180deg, #eef4ef, #e7efe9);\n    border: 1px solid var(--block-border);\n    border-left: 4px solid var(--accent);\n    border-radius: 8px;\n    padding: 3px 9px;\n    font-size: 0.85rem;\n    overflow: hidden;\n    cursor: grab;\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    justify-content: center;\n    z-index: 2;\n    box-shadow: var(--shadow-sm);\n    transition: box-shadow .15s, border-color .15s;\n  }\n  .block:hover { box-shadow: var(--shadow-md); border-color: #b2c9ba; }\n  .block:active { cursor: grabbing; }\n  .block.done {\n    background: repeating-linear-gradient(-45deg, #f3f2ec 0 5px, #edece5 5px 10px);\n    border-color: var(--line);\n    border-left-color: var(--done);\n    color: var(--done);\n    box-shadow: none;\n  }\n  .block.done .b-title { text-decoration: line-through; font-weight: 400; }\n  .block.done .b-time { color: var(--ink-faint); }\n  .block.focus-block {\n    border-left-color: var(--focus);\n    background: linear-gradient(180deg, #f9efdc, #f6ead2);\n    border-color: var(--focus-line);\n  }\n  .block.focus-block:hover { border-color: #dcbf8b; border-left-color: var(--focus); }\n  .block.focus-block.done {\n    background: repeating-linear-gradient(-45deg, #f3f2ec 0 5px, #edece5 5px 10px);\n    border-color: var(--line);\n    border-left-color: var(--done);\n  }\n  .block.selected { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); z-index: 4; }\n  .block .b-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n  .block .b-time {\n    font-size: 0.68rem;\n    color: var(--ink-soft);\n    white-space: nowrap;\n    font-variant-numeric: tabular-nums;\n    letter-spacing: 0.02em;\n  }\n  .resize-handle {\n    position: absolute;\n    left: 0; right: 0; bottom: -3px;\n    height: 8px;\n    cursor: ns-resize;\n  }\n  #dropGhost {\n    position: absolute;\n    left: 0; right: 0;\n    background: rgba(64,116,90,0.12);\n    border: 1.5px dashed var(--accent);\n    border-radius: 8px;\n    display: none;\n    pointer-events: none;\n    z-index: 3;\n  }\n\n  /* ---------- notes panel ---------- */\n  #notesPanel {\n    width: 250px;\n    flex: none;\n    display: flex;\n    flex-direction: column;\n    border-left: 1px solid var(--line);\n    background: var(--panel);\n    padding: 14px 16px;\n    min-height: 0;\n  }\n  #notesPanel h2 {\n    font-size: 0.72rem;\n    letter-spacing: 0.14em;\n    color: var(--ink-soft);\n    font-weight: 700;\n    margin-bottom: 10px;\n  }\n  #notesArea {\n    flex: 1;\n    resize: none;\n    border: none;\n    outline: none;\n    background-image: repeating-linear-gradient(transparent, transparent calc(1.8em - 1px), var(--line-soft) calc(1.8em - 1px), var(--line-soft) 1.8em);\n    background-attachment: local;\n    background-color: transparent;\n    color: var(--ink);\n    font-family: inherit;\n    font-size: 0.9rem;\n    line-height: 1.8;\n    min-height: 0;\n  }\n  #notesArea::placeholder { color: var(--ink-faint); }\n\n  /* ---------- block action bar ---------- */\n  #blockMenu {\n    position: absolute;\n    display: none;\n    background: var(--card);\n    border: 1px solid var(--line);\n    border-radius: 12px;\n    box-shadow: var(--shadow-lg);\n    padding: 6px;\n    z-index: 20;\n    gap: 3px;\n    align-items: center;\n  }\n  #blockMenu.open { display: flex; }\n  #blockMenu button {\n    border: none;\n    background: transparent;\n    border-radius: 8px;\n    padding: 5px 10px;\n    cursor: pointer;\n    font-size: 0.82rem;\n    color: var(--ink);\n    white-space: nowrap;\n    transition: background .12s;\n  }\n  #blockMenu button:hover { background: var(--bg); }\n  #blockMenu .m-danger { color: var(--danger); }\n  #blockMenu .m-danger:hover { background: #f6e8e2; }\n  #blockMenu .m-dur { color: var(--ink-soft); font-size: 0.78rem; padding: 0 3px; font-variant-numeric: tabular-nums; }\n\n  #emptyHint {\n    position: absolute;\n    inset: 0;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    color: var(--ink-faint);\n    font-size: 0.9rem;\n    letter-spacing: 0.02em;\n    pointer-events: none;\n  }\n\n  #dragPill {\n    position: fixed;\n    z-index: 100;\n    background: var(--card);\n    border: 1px solid var(--accent);\n    border-radius: 999px;\n    padding: 5px 14px;\n    font-size: 0.85rem;\n    pointer-events: none;\n    box-shadow: var(--shadow-lg);\n    max-width: 220px;\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n  }\n  body.is-dragging { cursor: grabbing; }\n  body.is-dragging * { cursor: grabbing !important; }\n<\u002Fstyle>\n<\u002Fhead>\n<body>\n\n<header>\n  <h1>我的一天<\u002Fh1>\n  <div class=\"date-nav\">\n    <button id=\"prevDay\">‹<\u002Fbutton>\n    <button id=\"todayBtn\" class=\"today-btn\">今天<\u002Fbutton>\n    <button id=\"nextDay\">›<\u002Fbutton>\n  <\u002Fdiv>\n  <div id=\"dateLabel\"><\u002Fdiv>\n  <div class=\"spacer\"><\u002Fdiv>\n  <div class=\"range-ctl\">\n    显示 <select id=\"dayStart\"><\u002Fselect> — <select id=\"dayEnd\"><\u002Fselect>\n  <\u002Fdiv>\n<\u002Fheader>\n\n<main>\n  <div id=\"left\">\n    <section id=\"focusSection\">\n      <h2>★ 今日焦点（最多 3 件）<\u002Fh2>\n      <div id=\"focusList\"><\u002Fdiv>\n    <\u002Fsection>\n\n    <section id=\"inboxSection\">\n      <h2>待办清单<\u002Fh2>\n      <div id=\"addRow\">\n        <input id=\"addInput\" type=\"text\" placeholder=\"想到什么记下来，回车添加\" autocomplete=\"off\">\n        <button id=\"addBtn\" title=\"添加\">+<\u002Fbutton>\n      <\u002Fdiv>\n      <div id=\"todoList\"><\u002Fdiv>\n      <div class=\"hint\">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点。<\u002Fdiv>\n    <\u002Fsection>\n\n    <section id=\"doneSection\">\n      <h2 id=\"doneHeader\">✓ 已完成 <span class=\"count\" id=\"doneCount\">0<\u002Fspan>\n        <button id=\"clearDone\" title=\"清空已完成\">清空<\u002Fbutton>\n      <\u002Fh2>\n      <div id=\"doneList\"><\u002Fdiv>\n    <\u002Fsection>\n  <\u002Fdiv>\n\n  <div id=\"right\">\n    <div id=\"timeline\">\n      <div id=\"hourRows\"><\u002Fdiv>\n      <div id=\"blocksArea\"><\u002Fdiv>\n      <div id=\"dropGhost\"><\u002Fdiv>\n      <div id=\"nowLine\"><\u002Fdiv>\n      <div id=\"emptyHint\">双击空白处快速安排，或从左边拖任务过来<\u002Fdiv>\n    <\u002Fdiv>\n  <\u002Fdiv>\n\n  <div id=\"notesPanel\">\n    <h2>✎ 随手记<\u002Fh2>\n    <textarea id=\"notesArea\" placeholder=\"想法、灵感、备忘……写在这里，自动保存。\"><\u002Ftextarea>\n  <\u002Fdiv>\n<\u002Fmain>\n\n<div id=\"blockMenu\"><\u002Fdiv>\n\n<script>\n(() => {\n  'use strict';\n\n  /* ---------------- state ---------------- */\n  const STORE_KEY = 'myday.v1';\n  const SNAP = 30; // minutes\n\n  const defaults = { tasks: [], notes: '', settings: { dayStart: 7, dayEnd: 23 } };\n  let state = load();\n  let viewDate = todayStr();          // 'YYYY-MM-DD' currently shown on timeline\n  let selectedBlockId = null;\n\n  function load() {\n    try {\n      const raw = localStorage.getItem(STORE_KEY);\n      if (!raw) return structuredClone(defaults);\n      const s = JSON.parse(raw);\n      s.settings = Object.assign({}, defaults.settings, s.settings);\n      s.tasks = s.tasks || [];\n      return s;\n    } catch { return structuredClone(defaults); }\n  }\n  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }\n\n  function todayStr(d = new Date()) {\n    const p = n => String(n).padStart(2, '0');\n    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;\n  }\n  function uid() { return Math.random().toString(36).slice(2, 9) + Date.now().toString(36); }\n  function fmtTime(min) {\n    const p = n => String(n).padStart(2, '0');\n    return `${p(Math.floor(min / 60))}:${p(min % 60)}`;\n  }\n\n  /* -------- rollover: 昨天没做完的排程任务，收回清单并标\"顺延\" -------- */\n  (function rollover() {\n    const today = todayStr();\n    let changed = false;\n    for (const t of state.tasks) {\n      if (t.scheduledDate && t.scheduledDate < today && !t.done) {\n        t.scheduledDate = null;\n        t.startMin = null;\n        t.carried = true;\n        changed = true;\n      }\n    }\n    if (changed) save();\n  })();\n\n  /* -------- migrate: 旧数据没有手动排序字段，按原来的显示顺序补上 -------- */\n  (function migrateOrder() {\n    if (state.tasks.every(t => t.order != null)) return;\n    const sorted = [...state.tasks].sort((a, b) =>\n      (b.focus - a.focus) || ((b.carried ? 1 : 0) - (a.carried ? 1 : 0)) || (a.createdAt - b.createdAt));\n    sorted.forEach((t, i) => { t.order = i; });\n    save();\n  })();\n  function nextOrder() {\n    return state.tasks.reduce((m, t) => Math.max(m, t.order ?? 0), 0) + 1;\n  }\n\n  /* ---------------- header / date nav ---------------- */\n  const WEEKDAYS = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];\n  function renderDateLabel() {\n    const d = new Date(viewDate + 'T00:00:00');\n    const rel = viewDate === todayStr() ? '' :\n      (viewDate === todayStr(new Date(Date.now() + 864e5)) ? '（明天）' :\n       viewDate === todayStr(new Date(Date.now() - 864e5)) ? '（昨天）' : '');\n    document.getElementById('dateLabel').innerHTML =\n      `${d.getMonth() + 1}月${d.getDate()}日${rel}<span class=\"weekday\">${WEEKDAYS[d.getDay()]}<\u002Fspan>`;\n  }\n  function shiftDay(n) {\n    const d = new Date(viewDate + 'T00:00:00');\n    d.setDate(d.getDate() + n);\n    viewDate = todayStr(d);\n    closeMenu();\n    renderAll();\n  }\n  document.getElementById('prevDay').onclick = () => shiftDay(-1);\n  document.getElementById('nextDay').onclick = () => shiftDay(1);\n  document.getElementById('todayBtn').onclick = () => { viewDate = todayStr(); closeMenu(); renderAll(); };\n\n  /* ---------------- day range selects ---------------- */\n  const selStart = document.getElementById('dayStart');\n  const selEnd = document.getElementById('dayEnd');\n  for (let h = 0; h <= 12; h++) selStart.add(new Option(`${h}:00`, h));\n  for (let h = 12; h <= 24; h++) selEnd.add(new Option(`${h}:00`, h));\n  selStart.value = state.settings.dayStart;\n  selEnd.value = state.settings.dayEnd;\n  selStart.onchange = () => {\n    state.settings.dayStart = +selStart.value;\n    if (state.settings.dayEnd <= state.settings.dayStart) {\n      state.settings.dayEnd = state.settings.dayStart + 1;\n      selEnd.value = state.settings.dayEnd;\n    }\n    save(); renderAll();\n  };\n  selEnd.onchange = () => {\n    state.settings.dayEnd = +selEnd.value;\n    if (state.settings.dayStart >= state.settings.dayEnd) {\n      state.settings.dayStart = state.settings.dayEnd - 1;\n      selStart.value = state.settings.dayStart;\n    }\n    save(); renderAll();\n  };\n\n  /* ---------------- add task ---------------- */\n  const addInput = document.getElementById('addInput');\n  function addTask() {\n    const title = addInput.value.trim();\n    if (!title) return;\n    state.tasks.push({\n      id: uid(), title, done: false, focus: false,\n      scheduledDate: null, startMin: null, durMin: 60,\n      carried: false, createdAt: Date.now(), order: nextOrder()\n    });\n    addInput.value = '';\n    save(); renderAll();\n  }\n  addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });\n  document.getElementById('addBtn').onclick = addTask;\n\n  /* ---------------- task ops ---------------- */\n  function task(id) { return state.tasks.find(t => t.id === id); }\n  function toggleDone(id) { const t = task(id); if (t) { t.done = !t.done; save(); renderAll(); } }\n  function toggleFocus(id) {\n    const t = task(id); if (!t) return;\n    if (!t.focus && state.tasks.filter(x => x.focus && !x.done).length >= 3) {\n      alert('今日焦点最多 3 件 —— 先完成或取消一件吧。');\n      return;\n    }\n    t.focus = !t.focus; save(); renderAll();\n  }\n  function removeTask(id) {\n    state.tasks = state.tasks.filter(t => t.id !== id);\n    if (selectedBlockId === id) closeMenu();\n    save(); renderAll();\n  }\n  function unschedule(id) {\n    const t = task(id); if (!t) return;\n    t.scheduledDate = null; t.startMin = null;\n    closeMenu(); save(); renderAll();\n  }\n\n  /* ---------------- rename ---------------- */\n  function startRename(t, span) {\n    const input = document.createElement('input');\n    input.type = 'text';\n    input.className = 'rename-input';\n    input.value = t.title;\n    span.replaceWith(input);\n    input.focus();\n    input.select();\n    let finished = false;\n    const commit = () => {\n      if (finished) return;\n      finished = true;\n      const v = input.value.trim();\n      if (v) { t.title = v; save(); }\n      renderAll();\n    };\n    input.addEventListener('keydown', e => {\n      if (e.key === 'Enter') commit();\n      else if (e.key === 'Escape') { finished = true; renderAll(); }\n    });\n    input.addEventListener('blur', commit);\n    input.addEventListener('mousedown', e => e.stopPropagation());\n    input.addEventListener('dblclick', e => e.stopPropagation());\n  }\n  function renameTitleSpan(t, span) {\n    span.addEventListener('dblclick', e => {\n      e.stopPropagation();\n      startRename(t, span);\n    });\n    span.title = '双击改名';\n  }\n\n  /* ---------------- left panel render ---------------- */\n  function renderFocus() {\n    const list = document.getElementById('focusList');\n    list.innerHTML = '';\n    const items = state.tasks.filter(t => t.focus).sort((a, b) => a.order - b.order);\n    if (!items.length) {\n      list.innerHTML = '<div class=\"focus-empty\">今天最重要的 1–3 件事是什么？点任务旁的 ★ 选出来。<\u002Fdiv>';\n      return;\n    }\n    items.forEach((t, i) => {\n      const el = document.createElement('div');\n      el.className = 'focus-item' + (t.done ? ' done' : '');\n      el.dataset.id = t.id;\n      el.innerHTML = `<span class=\"focus-num\">${i + 1}<\u002Fspan>`;\n      el.addEventListener('mousedown', e => {\n        if (e.target.closest('.icon-btn, .check, .rename-input')) return;\n        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.focus-item' });\n      });\n      const chk = makeCheck(t);\n      const span = document.createElement('span');\n      span.textContent = t.title;\n      span.style.flex = '1';\n      renameTitleSpan(t, span);\n      const un = iconBtn('★', '取消焦点', () => toggleFocus(t.id));\n      un.classList.add('star-on');\n      el.append(chk, span, un);\n      list.appendChild(el);\n    });\n  }\n\n  function makeCheck(t) {\n    const chk = document.createElement('div');\n    chk.className = 'check' + (t.done ? ' on' : '');\n    chk.textContent = '✓';\n    chk.title = t.done ? '标记未完成' : '标记完成';\n    chk.onclick = () => toggleDone(t.id);\n    return chk;\n  }\n  function iconBtn(txt, title, fn) {\n    const b = document.createElement('button');\n    b.className = 'icon-btn';\n    b.textContent = txt;\n    b.title = title;\n    b.onclick = e => { e.stopPropagation(); fn(); };\n    return b;\n  }\n\n  function renderTodos() {\n    const list = document.getElementById('todoList');\n    list.innerHTML = '';\n    const pending = state.tasks\n      .filter(t => !t.done)\n      .sort((a, b) => a.order - b.order);\n    for (const t of pending) {\n      const el = document.createElement('div');\n      el.className = 'todo';\n      el.dataset.id = t.id;\n      el.addEventListener('mousedown', e => {\n        if (e.target.closest('.icon-btn, .check, .rename-input')) return;\n        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.todo' });\n      });\n\n      const chk = makeCheck(t);\n      const title = document.createElement('span');\n      title.className = 'title';\n      title.textContent = t.title;\n      renameTitleSpan(t, title);\n      el.append(chk, title);\n      if (t.carried) {\n        const tag = document.createElement('span');\n        tag.className = 'tag'; tag.textContent = '顺延'; tag.title = '之前没做完，顺延过来的';\n        el.appendChild(tag);\n      }\n      if (t.scheduledDate) {\n        const tag = document.createElement('span');\n        tag.className = 'tag sched-tag';\n        tag.textContent = (t.scheduledDate === todayStr() ? '今天 ' :\n                           t.scheduledDate === viewDate ? '' :\n                           t.scheduledDate.slice(5).replace('-', '/') + ' ') + fmtTime(t.startMin);\n        el.appendChild(tag);\n      }\n      const star = iconBtn('★', t.focus ? '取消焦点' : '设为今日焦点', () => toggleFocus(t.id));\n      if (t.focus) star.classList.add('star-on');\n      const del = iconBtn('✕', '删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(t.id); });\n      el.append(star, del);\n      list.appendChild(el);\n    }\n  }\n\n  function renderDone() {\n    const doneTasks = state.tasks.filter(t => t.done);\n    document.getElementById('doneCount').textContent = doneTasks.length;\n    const list = document.getElementById('doneList');\n    list.innerHTML = '';\n    for (const t of doneTasks) {\n      const el = document.createElement('div');\n      el.className = 'todo done';\n      const chk = makeCheck(t);\n      const title = document.createElement('span');\n      title.className = 'title';\n      title.textContent = t.title;\n      renameTitleSpan(t, title);\n      el.append(chk, title, iconBtn('✕', '删除', () => removeTask(t.id)));\n      list.appendChild(el);\n    }\n  }\n  document.getElementById('doneHeader').onclick = () =>\n    document.getElementById('doneList').classList.toggle('open');\n  document.getElementById('clearDone').onclick = e => {\n    e.stopPropagation();\n    if (confirm('清空所有已完成任务？')) {\n      state.tasks = state.tasks.filter(t => !t.done);\n      save(); renderAll();\n    }\n  };\n\n  /* ---------------- timeline ---------------- */\n  const timeline = document.getElementById('timeline');\n  const hourRows = document.getElementById('hourRows');\n  const blocksArea = document.getElementById('blocksArea');\n  const ghost = document.getElementById('dropGhost');\n  const nowLine = document.getElementById('nowLine');\n  let dragDur = 60; // duration of task being dragged, for ghost sizing\n\n  const dayStartMin = () => state.settings.dayStart * 60;\n  const dayEndMin = () => state.settings.dayEnd * 60;\n  const daySpan = () => dayEndMin() - dayStartMin();\n  const minToPct = m => (m - dayStartMin()) / daySpan() * 100;\n\n  function renderHours() {\n    hourRows.innerHTML = '';\n    for (let h = state.settings.dayStart; h <= state.settings.dayEnd; h++) {\n      const row = document.createElement('div');\n      row.className = 'hour-row';\n      row.style.top = minToPct(h * 60) + '%';\n      row.innerHTML = `<span class=\"hlabel\">${h}:00<\u002Fspan>`;\n      hourRows.appendChild(row);\n      if (h < state.settings.dayEnd) {\n        const half = document.createElement('div');\n        half.className = 'half-line';\n        half.style.top = minToPct(h * 60 + 30) + '%';\n        hourRows.appendChild(half);\n      }\n    }\n  }\n\n  function overlapColumns(items) {\n    // assign column index to overlapping blocks so they sit side by side\n    const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.durMin - b.durMin);\n    const cols = [];\n    for (const t of sorted) {\n      let c = 0;\n      while (cols[c] && cols[c] > t.startMin) c++;\n      cols[c] = t.startMin + t.durMin;\n      t._col = c;\n    }\n    const groups = new Map();\n    for (const t of sorted) {\n      let maxCol = 0;\n      for (const o of sorted) {\n        if (o.startMin < t.startMin + t.durMin && t.startMin < o.startMin + o.durMin)\n          maxCol = Math.max(maxCol, o._col);\n      }\n      groups.set(t.id, maxCol + 1);\n    }\n    return groups;\n  }\n\n  function renderBlocks() {\n    blocksArea.innerHTML = '';\n    const items = state.tasks.filter(t => t.scheduledDate === viewDate && t.startMin != null);\n    document.getElementById('emptyHint').style.display = items.length ? 'none' : 'flex';\n    const totalCols = overlapColumns(items);\n    for (const t of items) {\n      const el = document.createElement('div');\n      el.className = 'block'\n        + (t.done ? ' done' : '')\n        + (t.focus ? ' focus-block' : '')\n        + (t.id === selectedBlockId ? ' selected' : '');\n      const n = totalCols.get(t.id) || 1;\n      const w = 100 / n;\n      el.style.top = minToPct(t.startMin) + '%';\n      el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';\n      el.style.left = (t._col * w) + '%';\n      el.style.width = `calc(${w}% - 4px)`;\n      el.dataset.id = t.id;\n      el.innerHTML = `<span class=\"b-title\">${escapeHtml(t.title)}<\u002Fspan>` +\n        `<span class=\"b-time\">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}<\u002Fspan>`;\n\n      el.addEventListener('mousedown', e => {\n        const r = el.getBoundingClientRect();\n        beginDrag(e, t, { offsetPx: e.clientY - r.top, sourceEl: el });\n      });\n      el.addEventListener('click', e => {\n        e.stopPropagation();\n        if (justDragged) { justDragged = false; return; }\n        openMenu(t.id, el);\n      });\n      el.addEventListener('dblclick', e => {\n        e.stopPropagation();\n        renameByPrompt(t.id);\n      });\n\n      const handle = document.createElement('div');\n      handle.className = 'resize-handle';\n      handle.draggable = false;\n      handle.addEventListener('mousedown', e => startResize(e, t));\n      el.appendChild(handle);\n      blocksArea.appendChild(el);\n    }\n  }\n\n  function escapeHtml(s) {\n    return s.replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n  }\n\n  /* ------- resize ------- */\n  function startResize(e, t) {\n    e.preventDefault();\n    e.stopPropagation();\n    const rect = blocksArea.getBoundingClientRect();\n    const move = ev => {\n      const min = dayStartMin() + (ev.clientY - rect.top) / rect.height * daySpan();\n      let dur = Math.round((min - t.startMin) / SNAP) * SNAP;\n      dur = Math.max(SNAP, Math.min(dur, dayEndMin() - t.startMin));\n      if (dur !== t.durMin) { t.durMin = dur; renderBlocks(); }\n    };\n    const up = () => {\n      document.removeEventListener('mousemove', move);\n      document.removeEventListener('mouseup', up);\n      save(); renderAll();\n    };\n    document.addEventListener('mousemove', move);\n    document.addEventListener('mouseup', up);\n  }\n\n  /* ------- pointer-based drag & drop scheduling ------- */\n  let justDragged = false;\n\n  function yToSnappedMin(clientY) {\n    const rect = blocksArea.getBoundingClientRect();\n    const raw = dayStartMin() + (clientY - rect.top) / rect.height * daySpan();\n    let m = Math.round(raw / SNAP) * SNAP;\n    return Math.max(dayStartMin(), Math.min(m, dayEndMin() - SNAP));\n  }\n  function overTimeline(x, y) {\n    const r = timeline.getBoundingClientRect();\n    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;\n  }\n  function showGhostAt(clientY) {\n    const start = yToSnappedMin(clientY);\n    const dur = Math.min(dragDur, dayEndMin() - start);\n    ghost.style.display = 'block';\n    ghost.style.top = minToPct(start) + '%';\n    ghost.style.height = (dur / daySpan() * 100) + '%';\n    ghost.style.left = '52px';\n    ghost.style.right = '4px';\n  }\n  function hideGhost() { ghost.style.display = 'none'; }\n\n  /* 列表内排序的插入指示线 */\n  const dropIndicator = document.createElement('div');\n  dropIndicator.id = 'dropIndicator';\n  function overRect(x, y, el) {\n    const r = el.getBoundingClientRect();\n    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;\n  }\n  // 返回应插入到哪个元素之前（null = 末尾），排除正在拖的那个\n  function listDropTarget(listEl, itemSel, clientY, dragId) {\n    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== dragId);\n    for (const el of items) {\n      const r = el.getBoundingClientRect();\n      if (clientY < r.top + r.height / 2) return el;\n    }\n    return null;\n  }\n  function applyReorder(t, listEl, itemSel, beforeEl) {\n    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== t.id);\n    const idx = beforeEl ? items.indexOf(beforeEl) : items.length;\n    const prev = idx > 0 ? task(items[idx - 1].dataset.id) : null;\n    const next = idx < items.length ? task(items[idx].dataset.id) : null;\n    // 在全局顺序里重新插入并整体重编号，避免 order 出现并列\n    const all = state.tasks.filter(x => x.id !== t.id).sort((a, b) => a.order - b.order);\n    let insertIdx;\n    if (next) insertIdx = all.indexOf(next);\n    else if (prev) insertIdx = all.indexOf(prev) + 1;\n    else insertIdx = all.length;\n    all.splice(insertIdx, 0, t);\n    all.forEach((x, i) => { x.order = i; });\n    save(); renderAll();\n  }\n\n  function beginDrag(e, t, opts) {\n    if (e.button !== 0) return;\n    e.preventDefault();\n    const startX = e.clientX, startY = e.clientY;\n    const offsetPx = opts.offsetPx || 0;\n    let dragging = false;\n    let pill = null;\n    let overList = false;   // 当前是否悬停在来源列表上（排序模式）\n\n    const move = ev => {\n      if (!dragging) {\n        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;\n        dragging = true;\n        dragDur = t.durMin || 60;\n        closeMenu();\n        document.body.classList.add('is-dragging');\n        if (opts.sourceEl) opts.sourceEl.classList.add('dragging');\n        pill = document.createElement('div');\n        pill.id = 'dragPill';\n        pill.textContent = t.title;\n        document.body.appendChild(pill);\n      }\n      pill.style.left = (ev.clientX + 12) + 'px';\n      pill.style.top = (ev.clientY + 10) + 'px';\n      overList = false;\n      if (overTimeline(ev.clientX, ev.clientY)) {\n        showGhostAt(ev.clientY - offsetPx);\n        dropIndicator.remove();\n      } else {\n        hideGhost();\n        if (opts.listEl && overRect(ev.clientX, ev.clientY, opts.listEl)) {\n          overList = true;\n          const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);\n          if (before) opts.listEl.insertBefore(dropIndicator, before);\n          else opts.listEl.appendChild(dropIndicator);\n        } else {\n          dropIndicator.remove();\n        }\n      }\n    };\n    const up = ev => {\n      document.removeEventListener('mousemove', move);\n      document.removeEventListener('mouseup', up);\n      if (!dragging) return;\n      justDragged = true;\n      setTimeout(() => { justDragged = false; }, 0);\n      document.body.classList.remove('is-dragging');\n      if (pill) pill.remove();\n      hideGhost();\n      dropIndicator.remove();\n      if (opts.sourceEl) opts.sourceEl.classList.remove('dragging');\n      if (overTimeline(ev.clientX, ev.clientY)) {\n        t.scheduledDate = viewDate;\n        t.startMin = yToSnappedMin(ev.clientY - offsetPx);\n        t.durMin = Math.min(t.durMin || 60, dayEndMin() - t.startMin);\n        save(); renderAll();\n      } else if (overList && opts.listEl) {\n        const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);\n        applyReorder(t, opts.listEl, opts.itemSel, before);\n      }\n    };\n    document.addEventListener('mousemove', move);\n    document.addEventListener('mouseup', up);\n  }\n\n  /* ------- double-click quick create ------- */\n  timeline.addEventListener('dblclick', e => {\n    if (e.target.closest('.block')) return;\n    const start = yToSnappedMin(e.clientY);\n    const title = prompt(`在 ${fmtTime(start)} 安排什么？`);\n    if (!title || !title.trim()) return;\n    state.tasks.push({\n      id: uid(), title: title.trim(), done: false, focus: false,\n      scheduledDate: viewDate, startMin: start,\n      durMin: Math.min(60, dayEndMin() - start),\n      carried: false, createdAt: Date.now(), order: nextOrder()\n    });\n    save(); renderAll();\n  });\n\n  /* ------- block menu ------- */\n  const menu = document.getElementById('blockMenu');\n  function openMenu(id, blockEl) {\n    const t = task(id);\n    if (!t) return;\n    selectedBlockId = id;\n    menu.innerHTML = '';\n    const mkBtn = (label, fn, cls) => {\n      const b = document.createElement('button');\n      b.textContent = label;\n      if (cls) b.className = cls;\n      b.onclick = ev => { ev.stopPropagation(); fn(); };\n      menu.appendChild(b);\n    };\n    mkBtn(t.done ? '↩ 未完成' : '✓ 完成', () => { toggleDone(id); closeMenu(); });\n    const durLabel = document.createElement('span');\n    durLabel.className = 'm-dur';\n    durLabel.textContent = `${t.durMin >= 60 ? Math.floor(t.durMin / 60) + 'h' : ''}${t.durMin % 60 ? t.durMin % 60 + 'm' : ''}`;\n    mkBtn('−30m', () => {\n      t.durMin = Math.max(SNAP, t.durMin - 30);\n      save(); renderAll(); openMenuReposition(id);\n    });\n    menu.appendChild(durLabel);\n    mkBtn('+30m', () => {\n      t.durMin = Math.min(t.durMin + 30, dayEndMin() - t.startMin);\n      save(); renderAll(); openMenuReposition(id);\n    });\n    mkBtn('✎ 改名', () => renameByPrompt(id));\n    mkBtn('移回清单', () => unschedule(id));\n    mkBtn('删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(id); }, 'm-danger');\n\n    positionMenu(blockEl);\n    menu.classList.add('open');\n    renderBlocks();\n  }\n  function renameByPrompt(id) {\n    const t = task(id); if (!t) return;\n    const v = prompt('新的名字：', t.title);\n    if (v && v.trim()) { t.title = v.trim(); save(); renderAll(); }\n  }\n  function openMenuReposition(id) {\n    const el = blocksArea.querySelector(`.block[data-id=\"${id}\"]`);\n    if (el) openMenu(id, el);\n  }\n  function positionMenu(blockEl) {\n    const r = blockEl.getBoundingClientRect();\n    menu.style.left = Math.min(r.left, window.innerWidth - 380) + 'px';\n    menu.style.top = Math.min(r.bottom + 6, window.innerHeight - 50) + 'px';\n  }\n  function closeMenu() {\n    selectedBlockId = null;\n    menu.classList.remove('open');\n    renderBlocks();\n  }\n  document.addEventListener('click', e => {\n    if (!menu.contains(e.target) && !e.target.closest('.block')) closeMenu();\n  });\n\n  /* ------- notes ------- */\n  const notesArea = document.getElementById('notesArea');\n  notesArea.value = state.notes || '';\n  notesArea.addEventListener('input', () => {\n    state.notes = notesArea.value;\n    save();\n  });\n\n  /* ------- now line ------- */\n  function renderNow() {\n    const now = new Date();\n    const isToday = viewDate === todayStr();\n    const m = now.getHours() * 60 + now.getMinutes();\n    if (!isToday || m < dayStartMin() || m > dayEndMin()) {\n      nowLine.style.display = 'none';\n      return;\n    }\n    nowLine.style.display = 'block';\n    nowLine.style.top = minToPct(m) + '%';\n  }\n  setInterval(renderNow, 60 * 1000);\n\n  /* ---------------- render all ---------------- */\n  function renderAll() {\n    renderDateLabel();\n    renderFocus();\n    renderTodos();\n    renderDone();\n    renderHours();\n    renderBlocks();\n    renderNow();\n  }\n  renderAll();\n})();\n<\u002Fscript>\n\n\n<\u002Fbody><\u002Fhtml>"
+  </script>
+</body>
+</html>

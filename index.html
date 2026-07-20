@@ -1,0 +1,2883 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>一日一页</title>
+
+<!-- PWA：可安装、全屏、离线 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f1eee6">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="一日一页">
+<meta name="mobile-web-app-capable" content="yes">
+
+<style>
+  :root {
+    --bg: #f1eee6;
+    --panel: #faf9f4;
+    --card: #ffffff;
+    --ink: #2a2820;
+    --ink-soft: #8f897a;
+    --ink-faint: #bab4a4;
+    --line: #e4e0d3;
+    --line-soft: #edeadf;
+    --accent: #40745a;
+    --accent-deep: #315e47;
+    --accent-soft: #e3ece5;
+    --focus: #b06f24;
+    --focus-deep: #935912;
+    --focus-soft: #f7ecd8;
+    --focus-line: #e9d6b0;
+    --danger: #b5543b;
+    --now: #d84a37;
+    --block: #e9f0ea;
+    --block-border: #c9dbcf;
+    --done: #b3ad9e;
+    --radius: 10px;
+    --shadow-sm: 0 1px 2px rgba(57,50,33,.05);
+    --shadow-md: 0 2px 10px rgba(57,50,33,.09);
+    --shadow-lg: 0 12px 32px rgba(57,50,33,.16);
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-soft); }
+  button, select, input { font-family: inherit; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    flex: none;
+    position: relative;
+    z-index: 10;
+    box-shadow: var(--shadow-sm);
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+  header h1::after {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 8px;
+    vertical-align: 3px;
+  }
+  .date-nav {
+    display: flex; align-items: center; gap: 2px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .date-nav button {
+    border: none;
+    background: transparent;
+    border-radius: 999px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    color: var(--ink-soft);
+    transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .date-nav button:hover { background: var(--card); color: var(--ink); box-shadow: var(--shadow-sm); }
+  .date-nav .today-btn { color: var(--accent); font-weight: 600; }
+  .date-nav .today-btn:hover { color: var(--accent-deep); }
+  #dateLabel { font-size: 1.02rem; font-weight: 600; min-width: 200px; text-align: center; font-variant-numeric: tabular-nums; }
+  #dateLabel .weekday { color: var(--ink-soft); font-weight: 400; margin-left: 7px; font-size: 0.88rem; }
+  .spacer { flex: 1; }
+  .range-ctl { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 0.82rem; }
+  .range-ctl select {
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 3px 6px;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .range-ctl select:hover { border-color: var(--ink-faint); }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* ---------- left panel ---------- */
+  #left {
+    width: 330px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+    min-height: 0;
+  }
+  #left section { padding: 14px 16px; }
+  #left h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #focusSection {
+    border-bottom: 1px solid var(--focus-line);
+    background: linear-gradient(180deg, #faf4e6, #f8f0e0);
+  }
+  #focusSection h2 { color: var(--focus-deep); }
+  #focusList { display: flex; flex-direction: column; gap: 7px; }
+  .focus-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--focus-line);
+    border-radius: var(--radius);
+    font-weight: 500;
+    cursor: grab;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .focus-item:hover { border-color: #dcbf8b; box-shadow: var(--shadow-md); }
+  .focus-item:active { cursor: grabbing; }
+  .focus-item.done {
+    text-decoration: line-through;
+    color: var(--done);
+    font-weight: 400;
+    background: transparent;
+    border-color: var(--line-soft);
+    box-shadow: none;
+  }
+  .focus-empty { color: #a8996f; font-size: 0.84rem; padding: 6px 2px; line-height: 1.55; }
+  .focus-num {
+    color: #fff;
+    background: var(--focus);
+    font-weight: 700;
+    font-size: 0.72rem;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .focus-item.done .focus-num { background: var(--done); }
+
+  #inboxSection { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #addRow { display: flex; gap: 8px; margin-bottom: 12px; }
+  #addInput {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    background: var(--card);
+    color: var(--ink);
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(57,50,33,.04);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  #addInput::placeholder { color: var(--ink-faint); }
+  #addInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  #addBtn {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 0 15px;
+    font-size: 1.15rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background .15s;
+  }
+  #addBtn:hover { background: var(--accent-deep); }
+  #addBtn:active { transform: translateY(1px); }
+  #todoList {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    padding-right: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  #todoList::-webkit-scrollbar, #doneList::-webkit-scrollbar { width: 8px; }
+  #todoList::-webkit-scrollbar-thumb, #doneList::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  #todoList::-webkit-scrollbar-thumb:hover, #doneList::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+  .todo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    background: var(--card);
+    cursor: grab;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .todo:hover { border-color: var(--line); box-shadow: var(--shadow-md); }
+  .todo:active { cursor: grabbing; }
+  .todo.dragging, .focus-item.dragging { opacity: 0.35; }
+  #dropIndicator {
+    height: 0;
+    border-top: 2px solid var(--accent);
+    border-radius: 1px;
+    margin: -4px 0;
+    pointer-events: none;
+    position: relative;
+  }
+  #dropIndicator::before {
+    content: "";
+    position: absolute;
+    left: -1px; top: -4px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .rename-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--card);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .todo .title { flex: 1; word-break: break-all; line-height: 1.45; }
+  .todo.done .title { text-decoration: line-through; color: var(--done); }
+  .todo .tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--focus-deep);
+    background: var(--focus-soft);
+    border-radius: 999px;
+    padding: 2px 8px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .todo .sched-tag { color: var(--accent-deep); background: var(--accent-soft); }
+  .icon-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--ink-faint);
+    padding: 2px 5px;
+    border-radius: 6px;
+    flex: none;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity .12s, background .12s, color .12s;
+  }
+  .todo:hover .icon-btn, .focus-item:hover .icon-btn, .icon-btn.star-on { opacity: 1; }
+  .icon-btn:hover { background: var(--bg); color: var(--ink); }
+  .icon-btn.star-on { color: var(--focus); }
+  .icon-btn.star-on:hover { color: var(--focus-deep); background: var(--focus-soft); }
+  .check {
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--ink-faint);
+    border-radius: 6px;
+    cursor: pointer;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    color: transparent;
+    background: var(--card);
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .check:hover { border-color: var(--accent); }
+  .check.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .future-bar {
+    font-size: 12px;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 6px 8px;
+    margin-top: 2px;
+    border-radius: 6px;
+    user-select: none;
+    transition: color .15s, background .15s;
+  }
+  .future-bar:hover { color: var(--ink); background: var(--card); }
+
+  #doneSection { border-top: 1px solid var(--line); }
+  #doneHeader { cursor: pointer; user-select: none; transition: color .15s; }
+  #doneHeader:hover { color: var(--ink); }
+  #doneHeader .count {
+    color: var(--ink-soft);
+    font-weight: 600;
+    background: var(--bg);
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 0.7rem;
+    letter-spacing: 0;
+  }
+  #doneList { display: none; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  #doneList.open { display: flex; }
+  #doneList .todo { box-shadow: none; background: transparent; border-color: transparent; }
+  #doneList .todo:hover { background: var(--card); border-color: var(--line-soft); }
+  #clearDone {
+    margin-left: auto;
+    font-size: 0.72rem;
+    letter-spacing: normal;
+    color: var(--ink-faint);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 7px;
+    border-radius: 5px;
+    transition: color .15s, background .15s;
+  }
+  #clearDone:hover { color: var(--danger); background: #f6e8e2; }
+  .hint { font-size: 0.75rem; color: var(--ink-faint); padding: 10px 2px 0; line-height: 1.6; }
+
+  /* ---------- timeline ---------- */
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px 20px 16px; }
+  #timeline {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    border-radius: var(--radius);
+  }
+  .hour-row {
+    position: absolute;
+    left: 0; right: 0;
+    border-top: 1px solid var(--line);
+    display: flex;
+  }
+  .hour-row .hlabel {
+    width: 48px;
+    flex: none;
+    font-size: 0.7rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+    transform: translateY(-55%);
+    background: var(--bg);
+    padding-right: 10px;
+    text-align: right;
+  }
+  .half-line {
+    position: absolute;
+    left: 48px; right: 0;
+    border-top: 1px dashed var(--line-soft);
+  }
+  #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; }
+  #nowLine {
+    position: absolute;
+    left: 40px; right: 0;
+    border-top: 2px solid var(--now);
+    z-index: 5;
+    pointer-events: none;
+  }
+  #nowLine::before {
+    content: "";
+    position: absolute;
+    left: -5px; top: -5px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--now);
+    box-shadow: 0 0 0 3px rgba(216,74,55,.14);
+  }
+  .block {
+    position: absolute;
+    left: 0;
+    background: linear-gradient(180deg, #eef4ef, #e7efe9);
+    border: 1px solid var(--block-border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 3px 9px;
+    font-size: 0.85rem;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    z-index: 2;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .block:hover { box-shadow: var(--shadow-md); border-color: #b2c9ba; }
+  .block:active { cursor: grabbing; }
+  .block.done {
+    background: repeating-linear-gradient(-45deg, #f3f2ec 0 5px, #edece5 5px 10px);
+    border-color: var(--line);
+    border-left-color: var(--done);
+    color: var(--done);
+    box-shadow: none;
+  }
+  .block.done .b-title { text-decoration: line-through; font-weight: 400; }
+  .block.done .b-time { color: var(--ink-faint); }
+  .block.focus-block {
+    border-left-color: var(--focus);
+    background: linear-gradient(180deg, #f9efdc, #f6ead2);
+    border-color: var(--focus-line);
+  }
+  .block.focus-block:hover { border-color: #dcbf8b; border-left-color: var(--focus); }
+  .block.focus-block.done {
+    background: repeating-linear-gradient(-45deg, #f3f2ec 0 5px, #edece5 5px 10px);
+    border-color: var(--line);
+    border-left-color: var(--done);
+  }
+  .block.selected { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); z-index: 4; }
+  .block .b-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .block .b-time {
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .resize-handle {
+    position: absolute;
+    left: 0; right: 0; bottom: -3px;
+    height: 8px;
+    cursor: ns-resize;
+  }
+  #dropGhost {
+    position: absolute;
+    left: 52px; right: 4px;
+    background: rgba(64,116,90,0.12);
+    border: 1.5px dashed var(--accent);
+    border-radius: 8px;
+    display: none;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* ---------- 提醒（跟任务分开的轻量层） ---------- */
+  #remBar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 4px 10px 52px;
+    flex: none;
+  }
+  .rem-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    background: var(--focus-soft);
+    border: 1px dashed var(--focus-line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 0.92rem;
+    color: var(--focus-deep);
+    cursor: grab;
+    user-select: none;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .15s, background .15s;
+  }
+  .rem-pill:hover { border-color: var(--focus); }
+  .rem-pill:active { cursor: grabbing; }
+  .rem-pill.dragging { opacity: 0.35; }
+  .rem-pill .rem-bell { color: var(--focus); font-size: 0.85rem; }
+  .rem-pill .rem-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rem-pill .rem-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rem-pill .rem-x, .rem-flag .rem-x {
+    border: none;
+    background: none;
+    color: var(--focus-deep);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0 2px;
+    line-height: 1;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity .12s, color .12s;
+  }
+  .rem-pill:hover .rem-x { opacity: .55; }
+  .rem-pill .rem-x:hover, .rem-flag .rem-x:hover { opacity: 1; color: var(--danger); }
+  #remAdd {
+    border: none;
+    background: none;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 3px 9px;
+    border-radius: 999px;
+    transition: color .15s, background .15s;
+  }
+  #remAdd:hover { color: var(--focus-deep); background: var(--focus-soft); }
+  #remMarkers {
+    position: absolute;
+    left: 52px; right: 4px;
+    top: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* 时间轴右侧的提醒栏：任务块让出这一条，小旗永远不会被盖住 */
+  #timeline { --rail-w: 196px; }
+  #remRail {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: var(--rail-w);
+    background: rgba(247, 236, 216, .4);
+    border-left: 1px dashed var(--focus-line);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    display: none;
+    z-index: 0;
+  }
+  #timeline.has-rail #remRail { display: block; }
+  #timeline.has-rail #blocksArea { right: calc(var(--rail-w) + 12px); }
+  #timeline.has-rail #dropGhost { right: calc(var(--rail-w) + 12px); }
+  /* 提醒栏左缘的拖拽把手 */
+  #railSplit {
+    position: absolute;
+    left: -5px; top: 0; bottom: 0;
+    width: 10px;
+    cursor: col-resize;
+    z-index: 6;
+  }
+  #railSplit::after {
+    content: "";
+    position: absolute;
+    left: 4px; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background .15s;
+  }
+  #railSplit:hover::after, #railSplit.active::after { background: var(--focus-line); }
+  .rem-marker {
+    position: absolute;
+    left: 0; right: 0;
+    border-top: 2px dashed var(--focus);
+    opacity: .85;
+  }
+  .rem-marker .rem-flag {
+    position: absolute;
+    right: 2px; top: -14px;
+    width: calc(var(--rail-w) - 14px);
+    background: linear-gradient(180deg, #fdf6e6, #f8eed7);
+    border: 1px solid var(--focus-line);
+    border-left: 4px solid var(--focus);
+    color: var(--focus-deep);
+    border-radius: 8px;
+    padding: 6px 10px 7px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    pointer-events: auto;
+    cursor: grab;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .rem-marker .rem-flag:hover { border-color: var(--focus); box-shadow: var(--shadow-md); }
+  .rem-marker .rem-flag:active { cursor: grabbing; }
+  .rem-marker .rem-flag.dragging { opacity: 0.35; }
+  .rem-flag .rf-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .rem-flag .rf-time .rem-x { margin-left: auto; }
+  .rem-flag:hover .rem-x { opacity: .55; }
+  .rem-flag .rf-text {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    word-break: break-all;
+  }
+  #remGhost {
+    position: absolute;
+    left: 52px; right: 4px;
+    border-top: 2px dashed var(--focus);
+    display: none;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* ---------- 拖拽画块建任务 ---------- */
+  #editLayer {
+    position: absolute;
+    left: 52px; right: 4px;
+    top: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 7;
+  }
+  #timeline.has-rail #editLayer { right: calc(var(--rail-w) + 12px); }
+  #editLayer .block { pointer-events: auto; }
+  .block.creating {
+    cursor: default;
+    overflow: visible;
+    min-height: 36px;
+    gap: 2px;
+  }
+  .block.creating .rename-input {
+    flex: none;
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 3px 7px;
+  }
+
+  /* ---------- notes panel ---------- */
+  #notesPanel {
+    width: 250px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    padding: 14px 16px;
+    min-height: 0;
+  }
+  #notesPanel h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  #notesArea, #journalArea {
+    flex: 1;
+    resize: none;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    min-height: 0;
+  }
+  #notesArea::placeholder, #journalArea::placeholder { color: var(--ink-faint); }
+  .journal-h { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+
+  /* ---------- 可拖拽分隔条 ---------- */
+  .v-split {
+    width: 7px;
+    flex: none;
+    cursor: col-resize;
+    margin: 0 -3px;
+    position: relative;
+    z-index: 15;
+  }
+  .v-split::after {
+    content: "";
+    position: absolute;
+    left: 2px; right: 2px; top: 0; bottom: 0;
+    background: transparent;
+    border-radius: 2px;
+    transition: background .15s;
+  }
+  .v-split:hover::after, .v-split.active::after { background: var(--accent-soft); }
+
+  /* ---------- 数据文件引导弹层 ---------- */
+  #fsOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(42, 40, 32, .35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  #fsOverlay.open { display: flex; }
+  .fs-card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    padding: 26px 28px;
+    width: 420px;
+    max-width: 92vw;
+  }
+  .fs-card h3 { font-size: 1.05rem; margin-bottom: 10px; }
+  .fs-card p { font-size: .86rem; color: var(--ink-soft); line-height: 1.7; margin-bottom: 18px; }
+  .fs-actions { display: flex; flex-direction: column; gap: 8px; }
+  .fs-actions button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: .9rem;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .fs-actions button:hover { border-color: var(--ink-faint); }
+  .fs-actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .fs-actions button.primary:hover { background: var(--accent-deep); }
+  .fs-actions button.fs-later {
+    border: none;
+    background: none;
+    color: var(--ink-faint);
+    font-size: .8rem;
+    margin-top: 2px;
+  }
+  .fs-actions button.fs-later:hover { color: var(--ink-soft); }
+
+  /* ---------- block action bar ---------- */
+  #blockMenu, #remMenu {
+    position: absolute;
+    display: none;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    z-index: 20;
+    gap: 3px;
+    align-items: center;
+  }
+  #blockMenu.open, #remMenu.open { display: flex; }
+  #blockMenu button, #remMenu button {
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--ink);
+    white-space: nowrap;
+    transition: background .12s;
+  }
+  #blockMenu button:hover, #remMenu button:hover { background: var(--bg); }
+  #blockMenu .m-danger, #remMenu .m-danger { color: var(--danger); }
+  #blockMenu .m-danger:hover, #remMenu .m-danger:hover { background: #f6e8e2; }
+  #blockMenu .m-dur { color: var(--ink-soft); font-size: 0.78rem; padding: 0 3px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- 数据文件 chip & menu ---------- */
+  #cloudChip,
+  #fsChip {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    cursor: pointer;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  #cloudChip:hover, #fsChip:hover { border-color: var(--ink-faint); color: var(--ink); }
+  #cloudChip[data-state="on"], #fsChip[data-state="on"] { color: var(--accent-deep); border-color: var(--block-border); background: var(--accent-soft); }
+  #cloudChip[data-state="on"]:hover, #fsChip[data-state="on"]:hover { border-color: var(--accent); }
+  #cloudChip[data-state="prompt"], #fsChip[data-state="prompt"] { color: var(--focus-deep); border-color: var(--focus-line); background: var(--focus-soft); }
+  #cloudChip[data-state="prompt"]:hover, #fsChip[data-state="prompt"]:hover { border-color: var(--focus); }
+  /* 云同步特有状态：正在同步 / 离线待补传 */
+  #cloudChip[data-state="syncing"] { color: var(--ink-soft); border-color: var(--line); background: var(--panel); }
+  #cloudChip[data-state="offline"] { color: var(--focus-deep); border-color: var(--focus-line); background: var(--focus-soft); }
+  #cloudChip[data-state="error"] { color: var(--danger); border-color: #e6c3b8; background: #fbeeea; }
+  #fsMenu {
+    position: fixed;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    z-index: 30;
+    gap: 2px;
+    min-width: 200px;
+  }
+  #fsMenu.open { display: flex; }
+  #fsMenu button {
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--ink);
+    text-align: left;
+    white-space: nowrap;
+    transition: background .12s;
+  }
+  #fsMenu button:hover { background: var(--bg); }
+  #fsMenu .m-danger { color: var(--danger); }
+  #fsMenu .m-danger:hover { background: #f6e8e2; }
+  #fsMenu .m-note {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    padding: 4px 10px 6px;
+    border-top: 1px solid var(--line-soft);
+    margin-top: 3px;
+    white-space: pre-line;
+    word-break: break-all;
+    max-width: 230px;
+    line-height: 1.5;
+  }
+
+  #emptyHint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+  }
+
+  #dragPill {
+    position: fixed;
+    z-index: 100;
+    background: var(--card);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 0.85rem;
+    pointer-events: none;
+    box-shadow: var(--shadow-lg);
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.is-dragging { cursor: grabbing; }
+  body.is-dragging * { cursor: grabbing !important; }
+  /* 拖拽进行中禁掉浏览器自身的滚动/缩放手势，否则触摸拖到一半会被打断 */
+  body.is-dragging { touch-action: none; }
+
+  /* ---------- 手机版：单列 + 底部标签页 ---------- */
+  #tabBar { display: none; }
+  .only-mobile { display: none; }
+
+  @media (max-width: 760px) {
+    html, body { height: 100dvh; }
+
+    header {
+      gap: 10px;
+      padding: 10px 12px;
+      padding-top: max(10px, env(safe-area-inset-top));
+    }
+    header h1 { display: none; }      /* 375px 放不下，标题让位给日期和同步状态 */
+    #fsChip { display: none; }        /* iOS 不支持本地文件 API，备份入口并进云同步菜单 */
+    #cloudChip { max-width: 116px; }
+    .range-ctl { display: none; }          /* 显示时段在电脑上调，设置会同步过来 */
+    .spacer { display: none; }
+    #dateLabel {
+      min-width: 0;
+      flex: 1;
+      font-size: 0.92rem;
+      text-align: right;
+    }
+    #dateLabel .weekday { margin-left: 5px; }
+    .date-nav button { padding: 5px 11px; }
+
+    .v-split { display: none; }
+
+    /* 三个面板全宽，只显示当前标签对应的那个（!important 用来盖过存下来的内联宽度） */
+    #left, #right, #notesPanel {
+      width: 100% !important;
+      border-left: none;
+      border-right: none;
+      display: none;
+    }
+    body[data-tab="todo"]  #left,
+    body[data-tab="time"]  #right,
+    body[data-tab="notes"] #notesPanel { display: flex; }
+
+    #left { overflow: hidden; }
+    #right { padding: 10px 12px 12px; }
+    #notesPanel { padding: 12px 14px; }
+
+    /* 时间轴整块不滚动，直接把触摸手势交给我们自己处理 */
+    #timeline { touch-action: none; --rail-w: 104px !important; }
+    /* 清单里允许竖向滚动，长按才进入拖拽（见 beginDrag） */
+    .todo { touch-action: pan-y; }
+
+    .only-mobile { display: inline-flex; }
+
+    /* 触摸目标放大一点 */
+    .todo { padding-top: 8px; padding-bottom: 8px; }
+    /* 触摸屏没有 hover，图标按钮必须常驻可见 */
+    .icon-btn {
+      opacity: 1;
+      min-width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: var(--ink-soft);
+    }
+
+    #tabBar {
+      display: flex;
+      flex: none;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      padding-bottom: env(safe-area-inset-bottom);
+      z-index: 20;
+      box-shadow: 0 -1px 2px rgba(57, 50, 33, .05);
+    }
+    #tabBar button {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 8px 0 10px;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      color: var(--ink-soft);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: color .15s;
+    }
+    #tabBar button .ti { font-size: 1.02rem; letter-spacing: 0; line-height: 1; }
+    #tabBar button[aria-selected="true"] { color: var(--accent-deep); font-weight: 700; }
+
+    .fs-card { padding: 22px 20px; }
+  }
+
+  /* ---------- 排时间弹层（手机上代替「拖到时间轴」） ---------- */
+  #cloudOverlay,
+  #schedOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(42, 40, 32, .35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: 16px;
+  }
+  #schedOverlay.open, #cloudOverlay.open { display: flex; }
+  .sched-card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    padding: 22px 22px 18px;
+    width: 360px;
+    max-width: 100%;
+  }
+  .sched-card h3 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sched-card .sub { font-size: .78rem; color: var(--ink-soft); margin-bottom: 16px; }
+  .sched-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sched-row label { font-size: .8rem; color: var(--ink-soft); width: 52px; flex: none; }
+  .sched-row input, .sched-row select {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: .95rem;
+    outline: none;
+  }
+  .sched-row input:focus, .sched-row select:focus { border-color: var(--accent); }
+  .sched-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .sched-actions button {
+    flex: 1;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 9px;
+    padding: 9px 10px;
+    font-size: .85rem;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .sched-actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .sched-actions button.unset { color: var(--danger); flex: none; padding: 9px 12px; }
+  .sched-card .steps {
+    font-size: .78rem;
+    color: var(--ink-soft);
+    line-height: 1.75;
+    background: var(--bg);
+    border-radius: 9px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .sched-card .steps a { color: var(--accent-deep); }
+  .sched-card .steps code {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 4px;
+    font-size: .92em;
+  }
+  .sched-row input[type="password"], .sched-row input[type="text"] { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+  .cloud-msg { font-size: .78rem; line-height: 1.6; margin-top: 12px; min-height: 1.2em; }
+  .cloud-msg.err { color: var(--danger); }
+  .cloud-msg.ok { color: var(--accent-deep); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>一日一页</h1>
+  <div class="date-nav">
+    <button id="prevDay">‹</button>
+    <button id="todayBtn" class="today-btn">今天</button>
+    <button id="nextDay">›</button>
+  </div>
+  <div id="dateLabel"></div>
+  <div class="spacer"></div>
+  <div class="range-ctl">
+    显示 <select id="dayStart"></select> — <select id="dayEnd"></select>
+  </div>
+  <button id="cloudChip" data-state="none">云同步</button>
+  <button id="fsChip" data-state="none">数据文件</button>
+  <input id="importFile" type="file" accept=".json,application/json" hidden>
+</header>
+
+<main>
+  <div id="left">
+    <section id="focusSection">
+      <h2>★ 当前焦点（最多 3 件）</h2>
+      <div id="focusList"></div>
+    </section>
+
+    <section id="inboxSection">
+      <h2>待办清单</h2>
+      <div id="addRow">
+        <input id="addInput" type="text" placeholder="想到什么记下来，回车添加" autocomplete="off">
+        <button id="addBtn" title="添加">+</button>
+      </div>
+      <div id="todoList"></div>
+      <div class="hint">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点。</div>
+    </section>
+
+    <section id="doneSection">
+      <h2 id="doneHeader">✓ 已完成 <span class="count" id="doneCount">0</span>
+        <button id="clearDone" title="清空已完成">清空</button>
+      </h2>
+      <div id="doneList"></div>
+    </section>
+  </div>
+
+  <div class="v-split" id="splitLeft" title="拖动调整宽度"></div>
+
+  <div id="right">
+    <div id="remBar"></div>
+    <div id="timeline">
+      <div id="hourRows"></div>
+      <div id="remRail"><div id="railSplit" title="拖动调整提醒栏宽度"></div></div>
+      <div id="blocksArea"></div>
+      <div id="remMarkers"></div>
+      <div id="dropGhost"></div>
+      <div id="remGhost"></div>
+      <div id="editLayer"></div>
+      <div id="nowLine"></div>
+      <div id="emptyHint">在空白处按住往下拖，画出一段时间；也可以从左边拖任务过来</div>
+    </div>
+  </div>
+
+  <div class="v-split" id="splitNotes" title="拖动调整宽度"></div>
+
+  <div id="notesPanel">
+    <h2>✎ 随手记</h2>
+    <textarea id="notesArea" placeholder="想法、灵感、备忘……写在这里，自动保存。"></textarea>
+    <h2 id="journalTitle" class="journal-h">✦ 今日总结</h2>
+    <textarea id="journalArea" placeholder="今天过得怎么样？总结几句，只属于这一天。"></textarea>
+  </div>
+</main>
+
+<nav id="tabBar">
+  <button data-tab="todo" aria-selected="true"><span class="ti">☰</span>清单</button>
+  <button data-tab="time"><span class="ti">◷</span>时间轴</button>
+  <button data-tab="notes"><span class="ti">✎</span>随手记</button>
+</nav>
+
+<div id="blockMenu"></div>
+<div id="remMenu"></div>
+<div id="fsMenu"></div>
+
+<div id="cloudOverlay">
+  <div class="sched-card">
+    <h3>连接云同步</h3>
+    <div class="sub">数据存到你自己的一个私有 Gist，电脑和 iPhone 共用一份。</div>
+    <div class="steps">
+      1. 打开 <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">GitHub Token 页面</a>，生成一个 token<br>
+      2. 权限只需要勾 <code>gist</code>，有效期建议选 No expiration<br>
+      3. 把 token 贴到下面。第二台设备贴同一个 token 即可自动找到数据
+    </div>
+    <div class="sched-row">
+      <label for="cloudToken">Token</label>
+      <input id="cloudToken" type="password" placeholder="ghp_… 或 github_pat_…" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="sched-row">
+      <label for="cloudGistId">Gist ID</label>
+      <input id="cloudGistId" type="text" placeholder="留空＝自动新建 / 自动找到" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="cloud-msg" id="cloudMsg"></div>
+    <div class="sched-actions">
+      <button id="cloudCancel">关闭</button>
+      <button id="cloudConnect" class="primary">连接</button>
+    </div>
+  </div>
+</div>
+
+<div id="schedOverlay">
+  <div class="sched-card">
+    <h3 id="schedTitle"></h3>
+    <div class="sub" id="schedSub"></div>
+    <div class="sched-row">
+      <label for="schedTime">开始</label>
+      <input id="schedTime" type="time" step="900">
+    </div>
+    <div class="sched-row">
+      <label for="schedDur">时长</label>
+      <select id="schedDur"></select>
+    </div>
+    <div class="sched-actions">
+      <button id="schedUnset" class="unset">取消安排</button>
+      <button id="schedCancel">关闭</button>
+      <button id="schedOk" class="primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="fsOverlay">
+  <div class="fs-card">
+    <h3 id="fsOvTitle"></h3>
+    <p id="fsOvDesc"></p>
+    <div class="fs-actions" id="fsOvActions"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------------- state ---------------- */
+  const STORE_KEY = 'myday.v1';
+  const SNAP = 15; // minutes
+
+  const defaults = { tasks: [], notes: '', journal: {}, reminders: {}, settings: { dayStart: 7, dayEnd: 23 } };
+  let state = load();
+  let viewDate = todayStr();          // 'YYYY-MM-DD' currently shown on timeline
+  let selectedBlockId = null;
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return structuredClone(defaults);
+      return normalizeState(JSON.parse(raw));
+    } catch { return structuredClone(defaults); }
+  }
+  function save() {
+    state.savedAt = Date.now();
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    scheduleFileWrite();
+    scheduleCloudWrite();
+  }
+
+  function todayStr(d = new Date()) {
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  function uid() { return Math.random().toString(36).slice(2, 9) + Date.now().toString(36); }
+  function fmtTime(min) {
+    const p = n => String(n).padStart(2, '0');
+    return `${p(Math.floor(min / 60))}:${p(min % 60)}`;
+  }
+
+  /* -------- rollover: 昨天没做完的排程任务，收回清单并标"顺延" -------- */
+  function rolloverTasks() {
+    const today = todayStr();
+    let changed = false;
+    for (const t of state.tasks) {
+      if (t.scheduledDate && t.scheduledDate < today && !t.done) {
+        t.scheduledDate = null;
+        t.startMin = null;
+        t.carried = true;
+        changed = true;
+      }
+    }
+    if (changed) save();
+  }
+
+  /* -------- migrate: 旧数据没有手动排序字段，按原来的显示顺序补上 -------- */
+  function migrateOrder() {
+    if (state.tasks.every(t => t.order != null)) return;
+    const sorted = [...state.tasks].sort((a, b) =>
+      (b.focus - a.focus) || ((b.carried ? 1 : 0) - (a.carried ? 1 : 0)) || (a.createdAt - b.createdAt));
+    sorted.forEach((t, i) => { t.order = i; });
+    save();
+  }
+
+  /* -------- migrate: 旧数据的已完成任务没有完成日期，用排程日期（或今天）补上 -------- */
+  function migrateDoneAt() {
+    let changed = false;
+    for (const t of state.tasks) {
+      if (t.done && !t.doneAt) { t.doneAt = t.scheduledDate || todayStr(); changed = true; }
+    }
+    if (changed) save();
+  }
+
+  rolloverTasks();
+  migrateOrder();
+  migrateDoneAt();
+  function nextOrder() {
+    return state.tasks.reduce((m, t) => Math.max(m, t.order ?? 0), 0) + 1;
+  }
+
+  /* ---------------- header / date nav ---------------- */
+  const WEEKDAYS = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+  function renderDateLabel() {
+    const d = new Date(viewDate + 'T00:00:00');
+    const rel = viewDate === todayStr() ? '' :
+      (viewDate === todayStr(new Date(Date.now() + 864e5)) ? '（明天）' :
+       viewDate === todayStr(new Date(Date.now() - 864e5)) ? '（昨天）' : '');
+    document.getElementById('dateLabel').innerHTML =
+      `${d.getMonth() + 1}月${d.getDate()}日${rel}<span class="weekday">${WEEKDAYS[d.getDay()]}</span>`;
+  }
+  function shiftDay(n) {
+    const d = new Date(viewDate + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    viewDate = todayStr(d);
+    closeMenu();
+    renderAll();
+  }
+  document.getElementById('prevDay').onclick = () => shiftDay(-1);
+  document.getElementById('nextDay').onclick = () => shiftDay(1);
+  document.getElementById('todayBtn').onclick = () => { viewDate = todayStr(); closeMenu(); renderAll(); };
+
+  /* ---------------- day range selects ---------------- */
+  const selStart = document.getElementById('dayStart');
+  const selEnd = document.getElementById('dayEnd');
+  for (let h = 0; h <= 12; h++) selStart.add(new Option(`${h}:00`, h));
+  for (let h = 12; h <= 24; h++) selEnd.add(new Option(`${h}:00`, h));
+  selStart.value = state.settings.dayStart;
+  selEnd.value = state.settings.dayEnd;
+  selStart.onchange = () => {
+    state.settings.dayStart = +selStart.value;
+    if (state.settings.dayEnd <= state.settings.dayStart) {
+      state.settings.dayEnd = state.settings.dayStart + 1;
+      selEnd.value = state.settings.dayEnd;
+    }
+    save(); renderAll();
+  };
+  selEnd.onchange = () => {
+    state.settings.dayEnd = +selEnd.value;
+    if (state.settings.dayStart >= state.settings.dayEnd) {
+      state.settings.dayStart = state.settings.dayEnd - 1;
+      selStart.value = state.settings.dayStart;
+    }
+    save(); renderAll();
+  };
+
+  /* ---------------- add task ---------------- */
+  const addInput = document.getElementById('addInput');
+  function addTask() {
+    const title = addInput.value.trim();
+    if (!title) return;
+    state.tasks.push({
+      id: uid(), title, done: false, focus: false,
+      scheduledDate: null, startMin: null, durMin: 60,
+      carried: false, createdAt: Date.now(), order: nextOrder()
+    });
+    addInput.value = '';
+    save(); renderAll();
+  }
+  addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  document.getElementById('addBtn').onclick = addTask;
+
+  /* ---------------- task ops ---------------- */
+  function task(id) { return state.tasks.find(t => t.id === id); }
+  function toggleDone(id) {
+    const t = task(id); if (!t) return;
+    t.done = !t.done;
+    if (t.done) t.doneAt = viewDate;   // 记在当前查看的那一天
+    else delete t.doneAt;
+    save(); renderAll();
+  }
+  function toggleFocus(id) {
+    const t = task(id); if (!t) return;
+    if (!t.focus && state.tasks.filter(x => x.focus && !x.done).length >= 3) {
+      alert('当前焦点最多 3 件 —— 先完成或取消一件吧。');
+      return;
+    }
+    t.focus = !t.focus; save(); renderAll();
+  }
+  function removeTask(id) {
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    if (selectedBlockId === id) closeMenu();
+    save(); renderAll();
+  }
+  function unschedule(id) {
+    const t = task(id); if (!t) return;
+    t.scheduledDate = null; t.startMin = null;
+    closeMenu(); save(); renderAll();
+  }
+
+  /* ---------------- rename ---------------- */
+  function startRename(t, span) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = t.title;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const commit = () => {
+      if (finished) return;
+      finished = true;
+      const v = input.value.trim();
+      if (v) { t.title = v; save(); }
+      renderAll();
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') { finished = true; renderAll(); }
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('pointerdown', e => e.stopPropagation());
+    input.addEventListener('dblclick', e => e.stopPropagation());
+  }
+  function renameTitleSpan(t, span) {
+    span.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      startRename(t, span);
+    });
+    span.title = '双击改名';
+  }
+
+  /* ---------------- left panel render ---------------- */
+  function renderFocus() {
+    const list = document.getElementById('focusList');
+    list.innerHTML = '';
+    // 未完成的焦点一直显示；已完成的只显示在完成的那一天
+    const items = state.tasks
+      .filter(t => t.focus && (!t.done || t.doneAt === viewDate))
+      .sort((a, b) => a.order - b.order);
+    if (!items.length) {
+      list.innerHTML = '<div class="focus-empty">当下最重要的 1–3 件事是什么？点任务旁的 ★ 选出来。</div>';
+      return;
+    }
+    items.forEach((t, i) => {
+      const el = document.createElement('div');
+      el.className = 'focus-item' + (t.done ? ' done' : '');
+      el.dataset.id = t.id;
+      el.innerHTML = `<span class="focus-num">${i + 1}</span>`;
+      el.addEventListener('pointerdown', e => {
+        if (e.target.closest('.icon-btn, .check, .rename-input')) return;
+        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.focus-item' });
+      });
+      const chk = makeCheck(t);
+      const span = document.createElement('span');
+      span.textContent = t.title;
+      span.style.flex = '1';
+      renameTitleSpan(t, span);
+      const un = iconBtn('★', '取消焦点', () => toggleFocus(t.id));
+      un.classList.add('star-on');
+      el.append(chk, span, un);
+      list.appendChild(el);
+    });
+  }
+
+  function makeCheck(t) {
+    const chk = document.createElement('div');
+    chk.className = 'check' + (t.done ? ' on' : '');
+    chk.textContent = '✓';
+    chk.title = t.done ? '标记未完成' : '标记完成';
+    chk.onclick = () => toggleDone(t.id);
+    return chk;
+  }
+  function iconBtn(txt, title, fn) {
+    const b = document.createElement('button');
+    b.className = 'icon-btn';
+    b.textContent = txt;
+    b.title = title;
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    return b;
+  }
+
+  let showFuture = false;   // 「未来的事」折叠区是否展开（不持久化，每次打开默认收起）
+  function renderTodos() {
+    const list = document.getElementById('todoList');
+    list.innerHTML = '';
+    const pending = state.tasks
+      .filter(t => !t.done)
+      .sort((a, b) => a.order - b.order);
+    // 已排到未来日期的任务收进折叠条，不占用今天的注意力；到了那天自然回来
+    const today = todayStr();
+    const current = pending.filter(t => !(t.scheduledDate && t.scheduledDate > today));
+    const future = pending.filter(t => t.scheduledDate && t.scheduledDate > today);
+    for (const t of current) list.appendChild(todoRow(t, list));
+    if (future.length) {
+      const bar = document.createElement('div');
+      bar.className = 'future-bar';
+      bar.textContent = `${showFuture ? '▾' : '▸'} 已安排 ${future.length} 件未来的事`;
+      bar.title = showFuture ? '收起' : '展开看看（它们到了那天会自动出现）';
+      bar.onclick = () => { showFuture = !showFuture; renderTodos(); };
+      list.appendChild(bar);
+      if (showFuture) for (const t of future) list.appendChild(todoRow(t, list));
+    }
+  }
+
+  function todoRow(t, list) {
+    const el = document.createElement('div');
+    el.className = 'todo';
+    el.dataset.id = t.id;
+    el.addEventListener('pointerdown', e => {
+      if (e.target.closest('.icon-btn, .check, .rename-input')) return;
+      beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.todo' });
+    });
+
+    const chk = makeCheck(t);
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = t.title;
+    renameTitleSpan(t, title);
+    el.append(chk, title);
+    if (t.carried) {
+      const tag = document.createElement('span');
+      tag.className = 'tag'; tag.textContent = '顺延'; tag.title = '之前没做完，顺延过来的';
+      el.appendChild(tag);
+    }
+    if (t.scheduledDate) {
+      const tag = document.createElement('span');
+      tag.className = 'tag sched-tag';
+      tag.textContent = (t.scheduledDate === todayStr() ? '今天 ' :
+                         t.scheduledDate === viewDate ? '' :
+                         t.scheduledDate.slice(5).replace('-', '/') + ' ') + fmtTime(t.startMin);
+      el.appendChild(tag);
+    }
+    // 手机上没法把任务拖到时间轴（不在同一个标签页），用弹层选时间代替
+    const sched = iconBtn('◷', '排时间', () => openSchedPicker(t));
+    sched.classList.add('only-mobile');
+    const star = iconBtn('★', t.focus ? '取消焦点' : '设为焦点', () => toggleFocus(t.id));
+    if (t.focus) star.classList.add('star-on');
+    const del = iconBtn('✕', '删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(t.id); });
+    el.append(sched, star, del);
+    return el;
+  }
+
+  function renderDone() {
+    const doneTasks = state.tasks.filter(t => t.done && t.doneAt === viewDate);
+    document.getElementById('doneCount').textContent = doneTasks.length;
+    const list = document.getElementById('doneList');
+    list.innerHTML = '';
+    for (const t of doneTasks) {
+      const el = document.createElement('div');
+      el.className = 'todo done';
+      const chk = makeCheck(t);
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = t.title;
+      renameTitleSpan(t, title);
+      el.append(chk, title, iconBtn('✕', '删除', () => removeTask(t.id)));
+      list.appendChild(el);
+    }
+  }
+  document.getElementById('doneHeader').onclick = () =>
+    document.getElementById('doneList').classList.toggle('open');
+  document.getElementById('clearDone').onclick = e => {
+    e.stopPropagation();
+    if (confirm('删除这一天的已完成记录？（其他天的不受影响）')) {
+      state.tasks = state.tasks.filter(t => !(t.done && t.doneAt === viewDate));
+      save(); renderAll();
+    }
+  };
+
+  /* ---------------- timeline ---------------- */
+  const timeline = document.getElementById('timeline');
+  const hourRows = document.getElementById('hourRows');
+  const blocksArea = document.getElementById('blocksArea');
+  const ghost = document.getElementById('dropGhost');
+  const nowLine = document.getElementById('nowLine');
+  let dragDur = 60; // duration of task being dragged, for ghost sizing
+
+  const dayStartMin = () => state.settings.dayStart * 60;
+  const dayEndMin = () => state.settings.dayEnd * 60;
+  const daySpan = () => dayEndMin() - dayStartMin();
+  const minToPct = m => (m - dayStartMin()) / daySpan() * 100;
+
+  function renderHours() {
+    hourRows.innerHTML = '';
+    for (let h = state.settings.dayStart; h <= state.settings.dayEnd; h++) {
+      const row = document.createElement('div');
+      row.className = 'hour-row';
+      row.style.top = minToPct(h * 60) + '%';
+      row.innerHTML = `<span class="hlabel">${h}:00</span>`;
+      hourRows.appendChild(row);
+      if (h < state.settings.dayEnd) {
+        const half = document.createElement('div');
+        half.className = 'half-line';
+        half.style.top = minToPct(h * 60 + 30) + '%';
+        hourRows.appendChild(half);
+      }
+    }
+  }
+
+  function overlapColumns(items) {
+    // assign column index to overlapping blocks so they sit side by side
+    const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.durMin - b.durMin);
+    const cols = [];
+    for (const t of sorted) {
+      let c = 0;
+      while (cols[c] && cols[c] > t.startMin) c++;
+      cols[c] = t.startMin + t.durMin;
+      t._col = c;
+    }
+    const groups = new Map();
+    for (const t of sorted) {
+      let maxCol = 0;
+      for (const o of sorted) {
+        if (o.startMin < t.startMin + t.durMin && t.startMin < o.startMin + o.durMin)
+          maxCol = Math.max(maxCol, o._col);
+      }
+      groups.set(t.id, maxCol + 1);
+    }
+    return groups;
+  }
+
+  function renderBlocks() {
+    blocksArea.innerHTML = '';
+    const items = state.tasks.filter(t => t.scheduledDate === viewDate && t.startMin != null);
+    document.getElementById('emptyHint').style.display = items.length ? 'none' : 'flex';
+    const totalCols = overlapColumns(items);
+    for (const t of items) {
+      const el = document.createElement('div');
+      el.className = 'block'
+        + (t.done ? ' done' : '')
+        + (t.focus ? ' focus-block' : '')
+        + (t.id === selectedBlockId ? ' selected' : '');
+      const n = totalCols.get(t.id) || 1;
+      const w = 100 / n;
+      el.style.top = minToPct(t.startMin) + '%';
+      el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';
+      el.style.left = (t._col * w) + '%';
+      el.style.width = `calc(${w}% - 4px)`;
+      el.dataset.id = t.id;
+      el.innerHTML = `<span class="b-title">${escapeHtml(t.title)}</span>` +
+        `<span class="b-time">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}</span>`;
+
+      el.addEventListener('pointerdown', e => {
+        const r = el.getBoundingClientRect();
+        beginDrag(e, t, { offsetPx: e.clientY - r.top, sourceEl: el });
+      });
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        if (justDragged) { justDragged = false; return; }
+        openMenu(t.id, el);
+      });
+      el.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        renameByPrompt(t.id);
+      });
+
+      const handle = document.createElement('div');
+      handle.className = 'resize-handle';
+      handle.draggable = false;
+      handle.addEventListener('pointerdown', e => startResize(e, t));
+      el.appendChild(handle);
+      blocksArea.appendChild(el);
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ------- resize ------- */
+  function startResize(e, t) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = blocksArea.getBoundingClientRect();
+    const move = ev => {
+      const min = dayStartMin() + (ev.clientY - rect.top) / rect.height * daySpan();
+      let dur = Math.round((min - t.startMin) / SNAP) * SNAP;
+      dur = Math.max(SNAP, Math.min(dur, dayEndMin() - t.startMin));
+      if (dur !== t.durMin) { t.durMin = dur; renderBlocks(); }
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      save(); renderAll();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  }
+
+  /* 浏览器接管手势时（例如页面开始滚动）只会发 pointercancel，不会发 pointerup，
+     各处拖拽的收尾逻辑就永远不执行、监听器也摘不掉。这里补发一次 pointerup 兜底。 */
+  document.addEventListener('pointercancel', ev => {
+    document.dispatchEvent(new PointerEvent('pointerup', {
+      clientX: ev.clientX, clientY: ev.clientY, bubbles: true
+    }));
+  });
+
+  /* ------- pointer-based drag & drop scheduling ------- */
+  let justDragged = false;
+
+  function yToSnappedMin(clientY) {
+    const rect = blocksArea.getBoundingClientRect();
+    const raw = dayStartMin() + (clientY - rect.top) / rect.height * daySpan();
+    let m = Math.round(raw / SNAP) * SNAP;
+    return Math.max(dayStartMin(), Math.min(m, dayEndMin() - SNAP));
+  }
+  function overTimeline(x, y) {
+    const r = timeline.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  function showGhostAt(clientY) {
+    const start = yToSnappedMin(clientY);
+    const dur = Math.min(dragDur, dayEndMin() - start);
+    ghost.style.display = 'block';
+    ghost.style.top = minToPct(start) + '%';
+    ghost.style.height = (dur / daySpan() * 100) + '%';
+  }
+  function hideGhost() { ghost.style.display = 'none'; }
+
+  /* 列表内排序的插入指示线 */
+  const dropIndicator = document.createElement('div');
+  dropIndicator.id = 'dropIndicator';
+  function overRect(x, y, el) {
+    const r = el.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  // 返回应插入到哪个元素之前（null = 末尾），排除正在拖的那个
+  function listDropTarget(listEl, itemSel, clientY, dragId) {
+    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== dragId);
+    for (const el of items) {
+      const r = el.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return el;
+    }
+    return null;
+  }
+  function applyReorder(t, listEl, itemSel, beforeEl) {
+    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== t.id);
+    const idx = beforeEl ? items.indexOf(beforeEl) : items.length;
+    const prev = idx > 0 ? task(items[idx - 1].dataset.id) : null;
+    const next = idx < items.length ? task(items[idx].dataset.id) : null;
+    // 在全局顺序里重新插入并整体重编号，避免 order 出现并列
+    const all = state.tasks.filter(x => x.id !== t.id).sort((a, b) => a.order - b.order);
+    let insertIdx;
+    if (next) insertIdx = all.indexOf(next);
+    else if (prev) insertIdx = all.indexOf(prev) + 1;
+    else insertIdx = all.length;
+    all.splice(insertIdx, 0, t);
+    all.forEach((x, i) => { x.order = i; });
+    save(); renderAll();
+  }
+
+  function beginDrag(e, t, opts) {
+    if (e.button !== 0) return;
+    // 触摸时，清单里的条目不参与拖拽：手指在列表上滑动应该是滚动。
+    // （手机上排时间走任务条的「◷」弹层，时间轴里的块照常可拖）
+    if (e.pointerType && e.pointerType !== 'mouse' && opts.listEl) return;
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const offsetPx = opts.offsetPx || 0;
+    let dragging = false;
+    let pill = null;
+    let overList = false;   // 当前是否悬停在来源列表上（排序模式）
+
+    const move = ev => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+        dragging = true;
+        dragDur = t.durMin || 60;
+        closeMenu();
+        document.body.classList.add('is-dragging');
+        if (opts.sourceEl) opts.sourceEl.classList.add('dragging');
+        pill = document.createElement('div');
+        pill.id = 'dragPill';
+        pill.textContent = t.title;
+        document.body.appendChild(pill);
+      }
+      pill.style.left = (ev.clientX + 12) + 'px';
+      pill.style.top = (ev.clientY + 10) + 'px';
+      overList = false;
+      if (overTimeline(ev.clientX, ev.clientY)) {
+        showGhostAt(ev.clientY - offsetPx);
+        dropIndicator.remove();
+      } else {
+        hideGhost();
+        if (opts.listEl && overRect(ev.clientX, ev.clientY, opts.listEl)) {
+          overList = true;
+          const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);
+          if (before) opts.listEl.insertBefore(dropIndicator, before);
+          else opts.listEl.appendChild(dropIndicator);
+        } else {
+          dropIndicator.remove();
+        }
+      }
+    };
+    const up = ev => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      if (!dragging) return;
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }, 0);
+      document.body.classList.remove('is-dragging');
+      if (pill) pill.remove();
+      hideGhost();
+      dropIndicator.remove();
+      if (opts.sourceEl) opts.sourceEl.classList.remove('dragging');
+      if (overTimeline(ev.clientX, ev.clientY)) {
+        t.scheduledDate = viewDate;
+        t.startMin = yToSnappedMin(ev.clientY - offsetPx);
+        t.durMin = Math.min(t.durMin || 60, dayEndMin() - t.startMin);
+        save(); renderAll();
+      } else if (overList && opts.listEl) {
+        const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);
+        applyReorder(t, opts.listEl, opts.itemSel, before);
+      }
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  }
+
+  /* ------- 拖拽画块建任务（Google Calendar 式） ------- */
+  const editLayer = document.getElementById('editLayer');
+
+  function openBlockEditor(startMin, durMin) {
+    closeMenu();
+    editLayer.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'block creating';
+    el.style.top = minToPct(startMin) + '%';
+    el.style.height = Math.max(durMin / daySpan() * 100, 1.8) + '%';
+    el.style.left = '0';
+    el.style.width = 'calc(100% - 4px)';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.placeholder = '做什么？回车确认，Esc 取消';
+    const time = document.createElement('span');
+    time.className = 'b-time';
+    time.textContent = `${fmtTime(startMin)} – ${fmtTime(startMin + durMin)}`;
+    el.append(input, time);
+    el.addEventListener('pointerdown', ev => ev.stopPropagation());
+    editLayer.appendChild(el);
+    input.focus();
+    let finished = false;
+    const commit = () => {
+      if (finished) return;
+      finished = true;
+      const v = input.value.trim();
+      el.remove();
+      if (!v) return;
+      state.tasks.push({
+        id: uid(), title: v, done: false, focus: false,
+        scheduledDate: viewDate, startMin, durMin,
+        carried: false, createdAt: Date.now(), order: nextOrder()
+      });
+      save(); renderAll();
+    };
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') commit();
+      else if (ev.key === 'Escape') { finished = true; el.remove(); }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  timeline.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.block, .rem-flag, .rename-input, #railSplit')) return;
+    e.preventDefault();
+    const startClientY = e.clientY;
+    const anchor = yToSnappedMin(startClientY);
+    let creating = false;
+    const range = clientY => {
+      const cur = yToSnappedMin(clientY);
+      const a = Math.min(anchor, cur);
+      let b = Math.max(anchor, cur);
+      if (b === a) b = Math.min(a + 30, dayEndMin());   // 没拖出高度时默认半小时
+      return [a, b];
+    };
+    const move = ev => {
+      if (!creating) {
+        if (Math.abs(ev.clientY - startClientY) < 5) return;
+        creating = true;
+        closeMenu();
+      }
+      const [a, b] = range(ev.clientY);
+      ghost.style.display = 'block';
+      ghost.style.top = minToPct(a) + '%';
+      ghost.style.height = ((b - a) / daySpan() * 100) + '%';
+    };
+    const up = ev => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      if (!creating) return;
+      hideGhost();
+      const [a, b] = range(ev.clientY);
+      openBlockEditor(a, b - a);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  });
+
+  // 双击空白处也能快建：默认 1 小时，同样是就地输入
+  timeline.addEventListener('dblclick', e => {
+    if (e.target.closest('.block, .rem-flag, .rename-input, #railSplit')) return;
+    const start = yToSnappedMin(e.clientY);
+    openBlockEditor(start, Math.min(60, dayEndMin() - start));
+  });
+
+  /* ------- block menu ------- */
+  const menu = document.getElementById('blockMenu');
+  function openMenu(id, blockEl) {
+    const t = task(id);
+    if (!t) return;
+    selectedBlockId = id;
+    menu.innerHTML = '';
+    const mkBtn = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = ev => { ev.stopPropagation(); fn(); };
+      menu.appendChild(b);
+    };
+    mkBtn(t.done ? '↩ 未完成' : '✓ 完成', () => { toggleDone(id); closeMenu(); });
+    const durLabel = document.createElement('span');
+    durLabel.className = 'm-dur';
+    durLabel.textContent = `${t.durMin >= 60 ? Math.floor(t.durMin / 60) + 'h' : ''}${t.durMin % 60 ? t.durMin % 60 + 'm' : ''}`;
+    mkBtn('−30m', () => {
+      t.durMin = Math.max(SNAP, t.durMin - 30);
+      save(); renderAll(); openMenuReposition(id);
+    });
+    menu.appendChild(durLabel);
+    mkBtn('+30m', () => {
+      t.durMin = Math.min(t.durMin + 30, dayEndMin() - t.startMin);
+      save(); renderAll(); openMenuReposition(id);
+    });
+    mkBtn('✎ 改名', () => renameByPrompt(id));
+    mkBtn('移回清单', () => unschedule(id));
+    mkBtn('删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(id); }, 'm-danger');
+
+    positionMenu(blockEl);
+    menu.classList.add('open');
+    renderBlocks();
+  }
+  function renameByPrompt(id) {
+    const t = task(id); if (!t) return;
+    const v = prompt('新的名字：', t.title);
+    if (v && v.trim()) { t.title = v.trim(); save(); renderAll(); }
+  }
+  function openMenuReposition(id) {
+    const el = blocksArea.querySelector(`.block[data-id="${id}"]`);
+    if (el) openMenu(id, el);
+  }
+  function positionMenu(blockEl) {
+    const r = blockEl.getBoundingClientRect();
+    menu.style.left = Math.min(r.left, window.innerWidth - 380) + 'px';
+    menu.style.top = Math.min(r.bottom + 6, window.innerHeight - 50) + 'px';
+  }
+  function closeMenu() {
+    selectedBlockId = null;
+    menu.classList.remove('open');
+    renderBlocks();
+  }
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target) && !e.target.closest('.block')) closeMenu();
+  });
+
+  /* ------- 提醒（生日、纪念日、当天要记得的事，跟任务分开） ------- */
+  const remBar = document.getElementById('remBar');
+  const remMarkers = document.getElementById('remMarkers');
+  const remMenu = document.getElementById('remMenu');
+
+  function dayReminders(d = viewDate) { return state.reminders[d] || []; }
+
+  function parseTimeStr(s) {
+    const m = s.trim().match(/^(\d{1,2})[:：.](\d{2})$/);
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return +m[1] * 60 + +m[2];
+  }
+  function addReminder() {
+    const raw = prompt('这一天要记得什么？\n（开头写时间可定时，如「18:00 带妈妈吃晚餐」，不写就是全天）');
+    if (!raw || !raw.trim()) return;
+    let text = raw.trim(), time = null;
+    const m = raw.match(/^\s*(\d{1,2}[:：.]\d{2})\s+(.+)$/);
+    if (m) {
+      const t = parseTimeStr(m[1]);
+      if (t != null) { time = t; text = m[2].trim(); }
+    }
+    (state.reminders[viewDate] = state.reminders[viewDate] || []).push({ id: uid(), text, time });
+    save(); renderReminders();
+  }
+  function removeReminder(id) {
+    state.reminders[viewDate] = dayReminders().filter(r => r.id !== id);
+    if (!state.reminders[viewDate].length) delete state.reminders[viewDate];
+    remMenu.classList.remove('open');
+    save(); renderReminders();
+  }
+
+  function openRemMenu(r, anchorEl) {
+    remMenu.innerHTML = '';
+    const mk = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = ev => { ev.stopPropagation(); remMenu.classList.remove('open'); fn(); };
+      remMenu.appendChild(b);
+    };
+    mk('✎ 编辑', () => {
+      const v = prompt('提醒内容：', r.text);
+      if (v && v.trim()) { r.text = v.trim(); save(); renderReminders(); }
+    });
+    mk(r.time == null ? '⏰ 设时间' : '⏰ 改时间', () => {
+      const v = prompt('时间（如 18:00，留空 = 全天）：', r.time == null ? '' : fmtTime(r.time));
+      if (v === null) return;
+      if (!v.trim()) r.time = null;
+      else {
+        const t = parseTimeStr(v);
+        if (t == null) { alert('时间格式看不懂，试试写成 18:00 这样。'); return; }
+        r.time = t;
+      }
+      save(); renderReminders();
+    });
+    mk('删除', () => removeReminder(r.id), 'm-danger');
+    const rect = anchorEl.getBoundingClientRect();
+    remMenu.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+    remMenu.style.top = Math.min(rect.bottom + 6, window.innerHeight - 50) + 'px';
+    remMenu.classList.add('open');
+  }
+  document.addEventListener('click', e => {
+    if (!remMenu.contains(e.target) && !e.target.closest('.rem-pill, .rem-flag')) remMenu.classList.remove('open');
+  });
+
+  /* 拖拽提醒：胶囊拖进时间轴定时；小旗上下拖改时间，拖回顶部栏变全天 */
+  const remGhost = document.getElementById('remGhost');
+  let remJustDragged = false;
+  function showRemGhostAt(clientY) {
+    remGhost.style.display = 'block';
+    remGhost.style.top = minToPct(yToSnappedMin(clientY)) + '%';
+  }
+  function hideRemGhost() { remGhost.style.display = 'none'; }
+
+  // 时间轴上方的整条区域（提醒栏一带）都算「全天」落点，不用精准拖到胶囊上
+  function overBarZone(x, y) {
+    const tr = timeline.getBoundingClientRect();
+    const rr = document.getElementById('right').getBoundingClientRect();
+    return x >= rr.left && x <= rr.right && y >= rr.top && y < tr.top;
+  }
+
+  function beginRemDrag(e, r, sourceEl) {
+    if (e.button !== 0) return;
+    if (e.target.closest('.rem-x')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const sx = e.clientX, sy = e.clientY;
+    let dragging = false, pill = null;
+    const move = ev => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        dragging = true;
+        remMenu.classList.remove('open');
+        document.body.classList.add('is-dragging');
+        sourceEl.classList.add('dragging');
+        pill = document.createElement('div');
+        pill.id = 'dragPill';
+        document.body.appendChild(pill);
+      }
+      pill.style.left = (ev.clientX + 12) + 'px';
+      pill.style.top = (ev.clientY + 10) + 'px';
+      if (overTimeline(ev.clientX, ev.clientY)) {
+        pill.textContent = `⚑ ${fmtTime(yToSnappedMin(ev.clientY))} ${r.text}`;
+        showRemGhostAt(ev.clientY);
+      } else {
+        pill.textContent = (overBarZone(ev.clientX, ev.clientY) ? '⚑ 全天 ' : '⚑ ') + r.text;
+        hideRemGhost();
+      }
+    };
+    const up = ev => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      if (!dragging) return;
+      remJustDragged = true;
+      setTimeout(() => { remJustDragged = false; }, 0);
+      document.body.classList.remove('is-dragging');
+      sourceEl.classList.remove('dragging');
+      if (pill) pill.remove();
+      hideRemGhost();
+      if (overTimeline(ev.clientX, ev.clientY)) r.time = yToSnappedMin(ev.clientY);
+      else if (overBarZone(ev.clientX, ev.clientY)) r.time = null;
+      else return;
+      save(); renderReminders();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  }
+
+  function renderReminders() {
+    remBar.innerHTML = '';
+    remMarkers.innerHTML = '';
+    const items = [...dayReminders()].sort((a, b) =>
+      (a.time == null ? -1 : a.time) - (b.time == null ? -1 : b.time));
+    const inRange = r => r.time != null && r.time >= dayStartMin() && r.time <= dayEndMin();
+    timeline.classList.toggle('has-rail', items.some(inRange));
+    for (const r of items) {
+      // 显示范围内的定时提醒只在右侧提醒栏出现，顶部栏放全天的（和超出范围的）
+      if (inRange(r)) {
+        const line = document.createElement('div');
+        line.className = 'rem-marker';
+        line.style.top = minToPct(r.time) + '%';
+        const flag = document.createElement('span');
+        flag.className = 'rem-flag';
+        const tm = document.createElement('span');
+        tm.className = 'rf-time';
+        tm.textContent = `⚑ ${fmtTime(r.time)}`;
+        const fx = document.createElement('button');
+        fx.className = 'rem-x'; fx.textContent = '✕'; fx.title = '删除';
+        fx.onclick = e => { e.stopPropagation(); removeReminder(r.id); };
+        tm.appendChild(fx);
+        const tx = document.createElement('span');
+        tx.className = 'rf-text';
+        tx.textContent = r.text;
+        flag.append(tm, tx);
+        flag.title = '点击编辑；上下拖改时间，拖回顶部栏变全天';
+        flag.addEventListener('pointerdown', e => beginRemDrag(e, r, flag));
+        flag.onclick = e => {
+          e.stopPropagation();
+          if (remJustDragged) return;
+          openRemMenu(r, flag);
+        };
+        line.appendChild(flag);
+        remMarkers.appendChild(line);
+        continue;
+      }
+      const pill = document.createElement('span');
+      pill.className = 'rem-pill';
+      pill.title = '点击编辑；拖到时间轴可定到具体时间';
+      const bell = document.createElement('span');
+      bell.className = 'rem-bell'; bell.textContent = '⚑';
+      pill.appendChild(bell);
+      if (r.time != null) {
+        const tm = document.createElement('span');
+        tm.className = 'rem-time'; tm.textContent = fmtTime(r.time);
+        pill.appendChild(tm);
+      }
+      const tx = document.createElement('span');
+      tx.className = 'rem-text'; tx.textContent = r.text;
+      pill.appendChild(tx);
+      const x = document.createElement('button');
+      x.className = 'rem-x'; x.textContent = '✕'; x.title = '删除';
+      x.onclick = e => { e.stopPropagation(); removeReminder(r.id); };
+      pill.appendChild(x);
+      pill.addEventListener('pointerdown', e => beginRemDrag(e, r, pill));
+      pill.onclick = e => {
+        e.stopPropagation();
+        if (remJustDragged) return;
+        openRemMenu(r, pill);
+      };
+      remBar.appendChild(pill);
+    }
+    const add = document.createElement('button');
+    add.id = 'remAdd';
+    add.textContent = items.length ? '＋ 提醒' : '⚑ 添加提醒（生日、纪念日、要记得的事）';
+    add.onclick = e => { e.stopPropagation(); addReminder(); };
+    remBar.appendChild(add);
+  }
+
+  /* ------- notes ------- */
+  const notesArea = document.getElementById('notesArea');
+  notesArea.value = state.notes || '';
+  notesArea.addEventListener('input', () => {
+    state.notes = notesArea.value;
+    save();
+  });
+
+  /* ------- 今日总结（每天独立一篇） ------- */
+  const journalArea = document.getElementById('journalArea');
+  const journalTitle = document.getElementById('journalTitle');
+  journalArea.addEventListener('input', () => {
+    if (journalArea.value.trim()) state.journal[viewDate] = journalArea.value;
+    else delete state.journal[viewDate];
+    save();
+  });
+  function renderJournal() {
+    const d = new Date(viewDate + 'T00:00:00');
+    journalTitle.textContent = viewDate === todayStr()
+      ? '✦ 今日总结'
+      : `✦ ${d.getMonth() + 1}月${d.getDate()}日总结`;
+    if (document.activeElement !== journalArea)
+      journalArea.value = state.journal[viewDate] || '';
+  }
+
+  /* ---------------- 界面偏好：面板宽度（存本机，不进数据文件） ---------------- */
+  const UI_KEY = 'myday.ui';
+  let ui = {};
+  try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch { ui = {}; }
+  function saveUi() { localStorage.setItem(UI_KEY, JSON.stringify(ui)); }
+
+  const leftPanel = document.getElementById('left');
+  const notesPanel = document.getElementById('notesPanel');
+  if (ui.leftW) leftPanel.style.width = ui.leftW + 'px';
+  if (ui.notesW) notesPanel.style.width = ui.notesW + 'px';
+  function initSplitter(handleId, el, growDir, min, max, key) {
+    const handle = document.getElementById(handleId);
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const startX = e.clientX, startW = el.getBoundingClientRect().width;
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      const move = ev => {
+        const delta = ev.clientX - startX;
+        const w = growDir === 'right' ? startW + delta : startW - delta;
+        el.style.width = Math.max(min, Math.min(max, w)) + 'px';
+      };
+      const up = () => {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        handle.classList.remove('active');
+        document.body.style.cursor = '';
+        ui[key] = Math.round(el.getBoundingClientRect().width);
+        saveUi();
+      };
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+    });
+  }
+  initSplitter('splitLeft', leftPanel, 'right', 240, 560, 'leftW');
+  initSplitter('splitNotes', notesPanel, 'left', 180, 480, 'notesW');
+
+  /* 提醒栏宽度：拖左缘调整，同样只存本机 */
+  const railSplit = document.getElementById('railSplit');
+  function setRailW(w) {
+    w = Math.max(140, Math.min(460, Math.round(w)));
+    timeline.style.setProperty('--rail-w', w + 'px');
+    return w;
+  }
+  if (ui.railW) setRailW(ui.railW);
+  railSplit.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = document.getElementById('remRail').getBoundingClientRect().width;
+    let w = startW;
+    railSplit.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    const move = ev => { w = setRailW(startW - (ev.clientX - startX)); };
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      railSplit.classList.remove('active');
+      document.body.style.cursor = '';
+      ui.railW = w;
+      saveUi();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  });
+
+  /* ---------------- 数据文件（Edge / Chrome 共用一份数据） ---------------- */
+  const FS_SUPPORTED = 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
+  let fileHandle = null;
+  let fileMtime = 0;
+  let fsState = 'none';        // none | prompt | on
+  let writeTimer = null;
+  let writing = false;
+  let writeQueued = false;
+
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('myday-fs', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbGet(key) {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const g = db.transaction('kv').objectStore('kv').get(key);
+      g.onsuccess = () => { res(g.result); db.close(); };
+      g.onerror = () => { rej(g.error); db.close(); };
+    });
+  }
+  async function idbSet(key, val) {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(val, key);
+      tx.oncomplete = () => { res(); db.close(); };
+      tx.onerror = () => { rej(tx.error); db.close(); };
+    });
+  }
+  async function idbDel(key) {
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').delete(key);
+      tx.oncomplete = () => { res(); db.close(); };
+      tx.onerror = () => { rej(tx.error); db.close(); };
+    });
+  }
+
+  function normalizeState(s) {
+    s = (s && typeof s === 'object') ? s : {};
+    s.settings = Object.assign({}, defaults.settings, s.settings);
+    s.tasks = Array.isArray(s.tasks) ? s.tasks : [];
+    s.notes = typeof s.notes === 'string' ? s.notes : '';
+    s.journal = (s.journal && typeof s.journal === 'object') ? s.journal : {};
+    s.reminders = (s.reminders && typeof s.reminders === 'object') ? s.reminders : {};
+    return s;
+  }
+  // 合并两份数据：savedAt 新的一方为基底，另一方独有的任务/日记补进来，谁的都不丢
+  function mergeStates(a, b) {
+    a = normalizeState(a); b = normalizeState(b);
+    const [base, other] = (b.savedAt || 0) >= (a.savedAt || 0) ? [b, a] : [a, b];
+    const merged = normalizeState(JSON.parse(JSON.stringify(base)));
+    const ids = new Set(merged.tasks.map(t => t.id));
+    for (const t of other.tasks) if (!ids.has(t.id)) merged.tasks.push(t);
+    merged.journal = Object.assign({}, other.journal, merged.journal);
+    for (const [d, arr] of Object.entries(other.reminders)) {
+      if (!Array.isArray(arr)) continue;
+      const cur = merged.reminders[d] || (merged.reminders[d] = []);
+      const rids = new Set(cur.map(r => r.id));
+      for (const r of arr) if (!rids.has(r.id)) cur.push(r);
+    }
+    if (!merged.notes.trim()) merged.notes = other.notes;
+    else if (other.notes.trim() && other.notes !== merged.notes)
+      merged.notes = merged.notes + '\n────────\n' + other.notes;
+    return merged;
+  }
+  // 用另一份数据整体替换当前数据（来自文件或导入），并刷新界面
+  function adoptState(s) {
+    state = normalizeState(s);
+    rolloverTasks();
+    migrateOrder();
+    migrateDoneAt();
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    selStart.value = state.settings.dayStart;
+    selEnd.value = state.settings.dayEnd;
+    notesArea.value = state.notes || '';
+    closeMenu();
+    renderAll();
+  }
+
+  // 返回值：对象 = 文件里的数据；null = 空文件；undefined = 内容损坏
+  async function readFileState() {
+    const f = await fileHandle.getFile();
+    fileMtime = f.lastModified;
+    const text = await f.text();
+    if (!text.trim()) return null;
+    try { return JSON.parse(text); } catch { return undefined; }
+  }
+  async function writeFileNow() {
+    if (!fileHandle || fsState !== 'on') return;
+    if (writing) { writeQueued = true; return; }
+    writing = true;
+    try {
+      const w = await fileHandle.createWritable();
+      await w.write(JSON.stringify(state, null, 2));
+      await w.close();
+      fileMtime = (await fileHandle.getFile()).lastModified;
+    } catch (e) {
+      console.warn('写入数据文件失败：', e);
+    } finally {
+      writing = false;
+      if (writeQueued) { writeQueued = false; writeFileNow(); }
+    }
+  }
+  function scheduleFileWrite() {
+    if (fsState !== 'on') return;
+    clearTimeout(writeTimer);
+    writeTimer = setTimeout(writeFileNow, 400);
+  }
+
+  // savedAt 新的一方说了算：文件更新就采用文件，本机更新就写回文件
+  async function syncFromFile() {
+    let s;
+    try { s = await readFileState(); } catch (e) { console.warn('读取数据文件失败：', e); return; }
+    if (s === null || s === undefined) { await writeFileNow(); return; }
+    if ((s.savedAt || 0) > (state.savedAt || 0)) adoptState(s);
+    else if ((state.savedAt || 0) > (s.savedAt || 0)) await writeFileNow();
+  }
+  async function checkExternalChange() {
+    if (fsState !== 'on' || !fileHandle || writing) return;
+    try {
+      const f = await fileHandle.getFile();
+      if (f.lastModified > fileMtime) await syncFromFile();
+    } catch { /* 文件被移动/删除时静默忽略 */ }
+  }
+  window.addEventListener('focus', checkExternalChange);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkExternalChange(); });
+
+  function pickerError(e) {
+    if (e && e.name === 'AbortError') return; // 用户取消
+    alert('浏览器拒绝了文件访问：' + (e && e.message ? e.message : e));
+  }
+  async function pickNewFile() {
+    try {
+      const h = await window.showSaveFilePicker({
+        suggestedName: '一日一页-数据.json',
+        types: [{ description: 'JSON 数据文件', accept: { 'application/json': ['.json'] } }]
+      });
+      fileHandle = h; fsState = 'on';
+      try { await idbSet('dataFile', h); } catch { /* 记不住也能用，下次重选 */ }
+      await writeFileNow();
+    } catch (e) { pickerError(e); }
+    renderFsChip();
+  }
+  async function pickExistingFile() {
+    try {
+      const [h] = await window.showOpenFilePicker({
+        types: [{ description: 'JSON 数据文件', accept: { 'application/json': ['.json'] } }]
+      });
+      if ((await h.requestPermission({ mode: 'readwrite' })) !== 'granted') return;
+      fileHandle = h; fsState = 'on';
+      const s = await readFileState();
+      if (s === undefined) {
+        alert('这个文件不是「一日一页」的数据文件。');
+        fileHandle = null; fsState = 'none';
+        renderFsChip();
+        return;
+      }
+      try { await idbSet('dataFile', h); } catch {}
+      if (s === null) await writeFileNow();   // 空文件：把当前数据写进去
+      else {
+        // 有数据：和本机数据合并（两边的任务都保留），并把合并结果写回文件
+        const localHasData = state.tasks.length || state.notes.trim() || Object.keys(state.journal || {}).length;
+        adoptState(localHasData ? mergeStates(state, s) : s);
+        await writeFileNow();
+      }
+    } catch (e) { pickerError(e); }
+    renderFsChip();
+  }
+  async function disconnectFile() {
+    clearTimeout(writeTimer);
+    fileHandle = null; fsState = 'none'; fileMtime = 0;
+    try { await idbDel('dataFile'); } catch {}
+    renderFsChip();
+  }
+  async function reconnect() {
+    try {
+      if ((await fileHandle.requestPermission({ mode: 'readwrite' })) === 'granted') {
+        fsState = 'on';
+        await syncFromFile();
+      }
+    } catch (e) { console.warn(e); }
+    renderFsChip();
+  }
+  async function initFileStorage() {
+    if (!FS_SUPPORTED) { renderFsChip(); return; }
+    try { fileHandle = (await idbGet('dataFile')) || null; } catch { fileHandle = null; }
+    if (!fileHandle) { renderFsChip(); return; }
+    let p = 'prompt';
+    try { p = await fileHandle.queryPermission({ mode: 'readwrite' }); } catch {}
+    if (p === 'granted') { fsState = 'on'; await syncFromFile(); }
+    else fsState = 'prompt';
+    renderFsChip();
+  }
+
+  /* ---------------- 云同步（GitHub 私有 Gist，电脑 / iPhone 共用一份） ----------------
+     和数据文件走同一套规则：savedAt 新的一方说了算，首次连接时合并，两边任务都不丢。
+     断网不报错，改动照常存本机，联网后自动补传。 */
+  const CLOUD_KEY = 'myday.cloud';
+  const GIST_FILE = 'myday-data.json';
+  const GIST_DESC = '一日一页 · 数据（请勿删除）';
+
+  let cloud = { token: '', gistId: '' };
+  try { cloud = Object.assign(cloud, JSON.parse(localStorage.getItem(CLOUD_KEY)) || {}); } catch {}
+  let cloudState = 'none';      // none | syncing | on | offline | error
+  let cloudPulling = false;
+  let cloudWriteTimer = null, cloudWriting = false, cloudQueued = false, cloudDirty = false;
+
+  const cloudOn = () => !!(cloud.token && cloud.gistId);
+  function saveCloudCfg() { localStorage.setItem(CLOUD_KEY, JSON.stringify(cloud)); }
+  // 401/403/404 是配置问题（token 失效、没权限、gist 没了），其余当成网络问题
+  const isAuthErr = e => e && (e.status === 401 || e.status === 403 || e.status === 404);
+
+  async function gh(path, opts) {
+    const res = await fetch('https://api.github.com' + path, Object.assign({
+      headers: {
+        'Authorization': 'Bearer ' + cloud.token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    }, opts || {}));
+    if (!res.ok) {
+      const err = new Error('GitHub ' + res.status);
+      err.status = res.status;
+      try { err.detail = (await res.json()).message; } catch {}
+      throw err;
+    }
+    return res.json();
+  }
+
+  // 返回值：对象 = 云端数据；null = 还没有数据；undefined = 内容损坏
+  async function cloudRead() {
+    const g = await gh('/gists/' + cloud.gistId);
+    const f = g.files && g.files[GIST_FILE];
+    if (!f) return null;
+    let text = f.content;
+    if (f.truncated && f.raw_url) text = await (await fetch(f.raw_url)).text();
+    if (!text || !text.trim()) return null;
+    try { return JSON.parse(text); } catch { return undefined; }
+  }
+
+  async function cloudWriteNow() {
+    if (!cloudOn()) return;
+    if (cloudWriting) { cloudQueued = true; return; }
+    cloudWriting = true;
+    setCloudState('syncing');
+    try {
+      const files = {};
+      files[GIST_FILE] = { content: JSON.stringify(state, null, 2) };
+      await gh('/gists/' + cloud.gistId, { method: 'PATCH', body: JSON.stringify({ files }) });
+      cloudDirty = false;
+      setCloudState('on');
+    } catch (e) {
+      cloudDirty = true;                                   // 记着还欠一次上传
+      setCloudState(isAuthErr(e) ? 'error' : 'offline');
+      console.warn('云同步写入失败：', e);
+    } finally {
+      cloudWriting = false;
+      if (cloudQueued) { cloudQueued = false; cloudWriteNow(); }
+    }
+  }
+  function scheduleCloudWrite() {
+    if (!cloudOn()) return;
+    cloudDirty = true;
+    clearTimeout(cloudWriteTimer);
+    cloudWriteTimer = setTimeout(cloudWriteNow, 1200);     // 网络请求，防抖比本地文件长一些
+  }
+
+  async function cloudSync() {
+    if (!cloudOn() || cloudPulling) return;
+    cloudPulling = true;
+    setCloudState('syncing');
+    try {
+      const s = await cloudRead();
+      if (s === undefined) { setCloudState('error'); return; }
+      if (s === null) { await cloudWriteNow(); return; }
+      if ((s.savedAt || 0) > (state.savedAt || 0)) { adoptState(s); setCloudState('on'); }
+      else if ((state.savedAt || 0) > (s.savedAt || 0) || cloudDirty) await cloudWriteNow();
+      else setCloudState('on');
+    } catch (e) {
+      setCloudState(isAuthErr(e) ? 'error' : 'offline');   // 断网只是提示，不打断记事
+      console.warn('云同步读取失败：', e);
+    } finally {
+      cloudPulling = false;
+    }
+  }
+
+  // 第二台设备贴同一个 token：先在账号里找已有的数据 gist，找不到才新建
+  async function cloudFindOrCreate() {
+    const list = await gh('/gists?per_page=100');
+    const found = list.find(g => g.files && g.files[GIST_FILE]);
+    if (found) return found.id;
+    const files = {};
+    files[GIST_FILE] = { content: JSON.stringify(state, null, 2) };
+    const created = await gh('/gists', {
+      method: 'POST',
+      body: JSON.stringify({ description: GIST_DESC, public: false, files })
+    });
+    return created.id;
+  }
+
+  async function cloudConnect(token, gistId) {
+    cloud.token = token.trim();
+    cloud.gistId = (gistId || '').trim();
+    if (!cloud.gistId) cloud.gistId = await cloudFindOrCreate();
+    const s = await cloudRead();
+    if (s === undefined) { const e = new Error('bad json'); e.parse = true; throw e; }
+    saveCloudCfg();
+    if (s === null) { save(); await cloudWriteNow(); return '已在云端建好数据'; }
+    const localHasData = state.tasks.length || (state.notes || '').trim() ||
+                         Object.keys(state.journal || {}).length;
+    adoptState(localHasData ? mergeStates(state, s) : s);
+    save();                                                // 合并结果视为最新
+    await cloudWriteNow();
+    return localHasData ? '已连接，两边数据已合并' : '已连接，拉下了云端数据';
+  }
+
+  function cloudDisconnect() {
+    clearTimeout(cloudWriteTimer);
+    cloud = { token: '', gistId: '' };
+    localStorage.removeItem(CLOUD_KEY);
+    cloudDirty = false;
+    setCloudState('none');
+  }
+
+  /* ------- 云同步 chip ------- */
+  const cloudChip = document.getElementById('cloudChip');
+  const CLOUD_LABEL = {
+    none: ['云同步', '把数据同步到你的私有 Gist，电脑和 iPhone 共用一份'],
+    syncing: ['⟳ 同步中', '正在和云端同步…'],
+    on: ['● 已同步', '数据已同步到云端，点击管理'],
+    offline: ['⚠ 待补传', '网络不通，改动已存在本机，联网后会自动补传'],
+    error: ['⚠ 同步出错', 'token 失效或没有权限，点一下重新连接']
+  };
+  function setCloudState(s) { cloudState = s; renderCloudChip(); }
+  function renderCloudChip() {
+    const [txt, tip] = CLOUD_LABEL[cloudState] || CLOUD_LABEL.none;
+    cloudChip.dataset.state = cloudState;
+    cloudChip.textContent = txt;
+    cloudChip.title = tip;
+  }
+
+  /* ------- 连接弹层 ------- */
+  const cloudOverlay = document.getElementById('cloudOverlay');
+  const cloudMsg = document.getElementById('cloudMsg');
+  function openCloudSetup() {
+    fsMenu.classList.remove('open');
+    document.getElementById('cloudToken').value = cloud.token || '';
+    document.getElementById('cloudGistId').value = cloud.gistId || '';
+    cloudMsg.textContent = '';
+    cloudMsg.className = 'cloud-msg';
+    cloudOverlay.classList.add('open');
+  }
+  function closeCloudSetup() { cloudOverlay.classList.remove('open'); }
+  function cloudErrText(e) {
+    if (e && e.parse) return '这个 Gist 里的内容不是「一日一页」的数据。';
+    if (!e) return '连接失败。';
+    if (e.status === 401) return 'token 无效或已过期，请重新生成一个。';
+    if (e.status === 403) return '权限不足：生成 token 时要勾上 gist 权限。';
+    if (e.status === 404) return '找不到这个 Gist，检查一下 Gist ID。';
+    if (e.status) return 'GitHub 返回错误 ' + e.status + (e.detail ? '：' + e.detail : '');
+    return '连不上网络，检查网络后再试。';
+  }
+  document.getElementById('cloudCancel').onclick = closeCloudSetup;
+  cloudOverlay.addEventListener('click', e => { if (e.target === cloudOverlay) closeCloudSetup(); });
+  document.getElementById('cloudConnect').onclick = async () => {
+    const btn = document.getElementById('cloudConnect');
+    const token = document.getElementById('cloudToken').value.trim();
+    if (!token) {
+      cloudMsg.className = 'cloud-msg err';
+      cloudMsg.textContent = '请先把 token 贴上来。';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '连接中…';
+    cloudMsg.className = 'cloud-msg';
+    cloudMsg.textContent = '';
+    try {
+      const msg = await cloudConnect(token, document.getElementById('cloudGistId').value);
+      setCloudState('on');
+      cloudMsg.className = 'cloud-msg ok';
+      cloudMsg.textContent = msg + '。Gist ID：' + cloud.gistId;
+      setTimeout(closeCloudSetup, 1800);
+    } catch (e) {
+      cloudMsg.className = 'cloud-msg err';
+      cloudMsg.textContent = cloudErrText(e);
+      console.warn('云同步连接失败：', e);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '连接';
+    }
+  };
+
+  cloudChip.onclick = e => {
+    e.stopPropagation();
+    if (!cloudOn() || cloudState === 'error') { openCloudSetup(); return; }
+    toggleCloudMenu();
+  };
+  function toggleCloudMenu() {
+    if (fsMenu.classList.contains('open')) { fsMenu.classList.remove('open'); return; }
+    fsMenu.innerHTML = '';
+    const mk = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = ev => { ev.stopPropagation(); fsMenu.classList.remove('open'); fn(); };
+      fsMenu.appendChild(b);
+    };
+    mk('立即同步', cloudSync);
+    mk('重新连接 / 换 token…', openCloudSetup);
+    mk('导出备份 (.json)', exportJson);
+    mk('导入备份…', () => importInput.click());
+    mk('断开云同步（数据留在本机）', cloudDisconnect, 'm-danger');
+    const note = document.createElement('div');
+    note.className = 'm-note';
+    note.textContent = 'Gist ID：' + cloud.gistId + '\n换设备时贴同一个 token 就能自动接上。';
+    fsMenu.appendChild(note);
+    const r = cloudChip.getBoundingClientRect();
+    fsMenu.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
+    fsMenu.style.top = (r.bottom + 6) + 'px';
+    fsMenu.classList.add('open');
+  }
+
+  // 回到 App / 恢复网络时拉一次；iOS 的 PWA 没有后台同步，这是唯一可靠的时机
+  window.addEventListener('focus', () => cloudSync());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) cloudSync(); });
+  window.addEventListener('online', () => cloudSync());
+
+  function initCloud() {
+    renderCloudChip();
+    if (cloudOn()) cloudSync();
+  }
+
+  /* ------- 导出 / 导入备份 ------- */
+  const importInput = document.getElementById('importFile');
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `一日一页-备份-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  importInput.onchange = async () => {
+    const f = importInput.files[0];
+    importInput.value = '';
+    if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      if (!confirm('导入会覆盖当前数据，继续？')) return;
+      adoptState(s);
+      save();
+    } catch { alert('这个文件无法解析成数据。'); }
+  };
+
+  /* ------- chip 与菜单 ------- */
+  const fsChip = document.getElementById('fsChip');
+  const fsMenu = document.getElementById('fsMenu');
+  function renderFsChip() {
+    fsChip.dataset.state = fsState;
+    if (fsState === 'on') {
+      fsChip.textContent = '● ' + (fileHandle ? fileHandle.name : '已连接');
+      fsChip.title = '数据已同步到本地文件，点击管理';
+    } else if (fsState === 'prompt') {
+      fsChip.textContent = '恢复文件连接';
+      fsChip.title = '点一下，恢复对数据文件的访问';
+    } else {
+      fsChip.textContent = FS_SUPPORTED ? '数据文件' : '备份';
+      fsChip.title = FS_SUPPORTED ? '把数据存到本地文件，Edge / Chrome 共用一份' : '导出 / 导入备份';
+    }
+    renderFsOverlay();
+  }
+  fsChip.onclick = e => {
+    e.stopPropagation();
+    if (fsState === 'prompt') { reconnect(); return; }
+    toggleFsMenu();
+  };
+  function toggleFsMenu() {
+    if (fsMenu.classList.contains('open')) { fsMenu.classList.remove('open'); return; }
+    fsMenu.innerHTML = '';
+    const mk = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = ev => { ev.stopPropagation(); fsMenu.classList.remove('open'); fn(); };
+      fsMenu.appendChild(b);
+    };
+    if (FS_SUPPORTED) {
+      if (fsState === 'on') {
+        mk('打开其他数据文件…', pickExistingFile);
+        mk('断开文件（改回仅本机存储）', disconnectFile, 'm-danger');
+      } else {
+        mk('新建数据文件…', pickNewFile);
+        mk('打开已有数据文件…', pickExistingFile);
+      }
+    }
+    mk('导出备份 (.json)', exportJson);
+    mk('导入备份…', () => importInput.click());
+    if (FS_SUPPORTED && fsState !== 'on') {
+      const note = document.createElement('div');
+      note.className = 'm-note';
+      note.textContent = '新建一次数据文件后，在另一个浏览器里「打开已有数据文件」选同一个文件，两边就共用一份数据。';
+      fsMenu.appendChild(note);
+    }
+    const r = fsChip.getBoundingClientRect();
+    fsMenu.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
+    fsMenu.style.top = (r.bottom + 6) + 'px';
+    fsMenu.classList.add('open');
+  }
+  document.addEventListener('click', e => {
+    if (!fsMenu.contains(e.target) && e.target !== fsChip && e.target !== cloudChip)
+      fsMenu.classList.remove('open');
+  });
+
+  /* ------- 启动引导弹层：把每个浏览器都引到同一个数据文件 ------- */
+  let overlayDismissed = false;
+  const fsOverlay = document.getElementById('fsOverlay');
+  function renderFsOverlay() {
+    const show = FS_SUPPORTED && !overlayDismissed &&
+      (fsState === 'prompt' || (fsState === 'none' && !ui.fsDismissed));
+    fsOverlay.classList.toggle('open', show);
+    if (!show) return;
+    const acts = document.getElementById('fsOvActions');
+    acts.innerHTML = '';
+    const mk = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = fn;
+      acts.appendChild(b);
+    };
+    if (fsState === 'prompt') {
+      document.getElementById('fsOvTitle').textContent = '恢复数据文件连接';
+      document.getElementById('fsOvDesc').textContent =
+        '浏览器重启后需要重新确认一次文件权限，点一下就能继续同步到「' +
+        (fileHandle ? fileHandle.name : '数据文件') + '」。';
+      mk('恢复连接', reconnect, 'primary');
+      mk('暂不，这次先用本机数据', () => { overlayDismissed = true; renderFsOverlay(); }, 'fs-later');
+    } else {
+      document.getElementById('fsOvTitle').textContent = '把数据统一到一个文件';
+      document.getElementById('fsOvDesc').textContent =
+        '这个浏览器还没连接数据文件。连接后，Edge 和 Chrome 共用同一份数据；连接时会自动合并，两边的任务都不会丢。';
+      mk('打开已有数据文件…', pickExistingFile, 'primary');
+      mk('新建数据文件…', pickNewFile);
+      mk('暂不，以后从右上角「数据文件」设置', () => {
+        overlayDismissed = true;
+        ui.fsDismissed = 1;
+        saveUi();
+        renderFsOverlay();
+      }, 'fs-later');
+    }
+  }
+
+  /* ------- now line ------- */
+  function renderNow() {
+    const now = new Date();
+    const isToday = viewDate === todayStr();
+    const m = now.getHours() * 60 + now.getMinutes();
+    if (!isToday || m < dayStartMin() || m > dayEndMin()) {
+      nowLine.style.display = 'none';
+      return;
+    }
+    nowLine.style.display = 'block';
+    nowLine.style.top = minToPct(m) + '%';
+  }
+  setInterval(renderNow, 60 * 1000);
+
+  /* ---------------- render all ---------------- */
+  function renderAll() {
+    renderDateLabel();
+    renderFocus();
+    renderTodos();
+    renderDone();
+    renderHours();
+    renderBlocks();
+    renderReminders();
+    renderNow();
+    renderJournal();
+  }
+  /* ---------------- 手机版：底部标签页 ---------------- */
+  const tabBar = document.getElementById('tabBar');
+  function setTab(name) {
+    document.body.dataset.tab = name;
+    for (const b of tabBar.querySelectorAll('button'))
+      b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false');
+    ui.tab = name;
+    saveUi();
+  }
+  tabBar.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) setTab(b.dataset.tab);
+  });
+  setTab(ui.tab || 'todo');
+
+  /* ------- 排时间弹层：手机上没法把任务拖到时间轴，用它代替 ------- */
+  const schedOverlay = document.getElementById('schedOverlay');
+  const schedTime = document.getElementById('schedTime');
+  const schedDur = document.getElementById('schedDur');
+  for (const m of [15, 30, 45, 60, 90, 120, 180]) {
+    const o = document.createElement('option');
+    o.value = String(m);
+    o.textContent = m < 60 ? m + ' 分钟' : (m / 60) + ' 小时';
+    schedDur.appendChild(o);
+  }
+  let schedTaskId = null;
+
+  function defaultStartMin() {
+    const now = new Date();
+    const m = Math.ceil((now.getHours() * 60 + now.getMinutes()) / SNAP) * SNAP;
+    return Math.max(dayStartMin(), Math.min(m, dayEndMin() - SNAP));
+  }
+  function openSchedPicker(t) {
+    schedTaskId = t.id;
+    document.getElementById('schedTitle').textContent = t.title;
+    document.getElementById('schedSub').textContent = t.scheduledDate
+      ? `现在安排在 ${t.scheduledDate} ${fmtTime(t.startMin)}`
+      : `安排到 ${viewDate}`;
+    const start = (t.scheduledDate && t.startMin != null) ? t.startMin : defaultStartMin();
+    schedTime.value = String(Math.floor(start / 60)).padStart(2, '0') + ':' +
+                      String(start % 60).padStart(2, '0');
+    schedDur.value = String(t.durMin || 60);
+    document.getElementById('schedUnset').style.display = t.scheduledDate ? '' : 'none';
+    schedOverlay.classList.add('open');
+  }
+  function closeSched() { schedOverlay.classList.remove('open'); schedTaskId = null; }
+
+  document.getElementById('schedCancel').onclick = closeSched;
+  schedOverlay.addEventListener('click', e => { if (e.target === schedOverlay) closeSched(); });
+  document.getElementById('schedOk').onclick = () => {
+    const t = task(schedTaskId);
+    if (!t) { closeSched(); return; }
+    const parts = (schedTime.value || '').split(':').map(Number);
+    if (parts.length !== 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) { closeSched(); return; }
+    const start = Math.max(dayStartMin(), Math.min(parts[0] * 60 + parts[1], dayEndMin() - SNAP));
+    t.scheduledDate = viewDate;
+    t.startMin = start;
+    t.durMin = Math.min(Number(schedDur.value) || 60, dayEndMin() - start);
+    save(); renderAll(); closeSched();
+  };
+  document.getElementById('schedUnset').onclick = () => {
+    const t = task(schedTaskId);
+    if (t) { t.scheduledDate = null; t.startMin = null; save(); renderAll(); }
+    closeSched();
+  };
+
+  renderAll();
+  renderFsChip();
+  initFileStorage();
+  initCloud();
+})();
+</script>
+
+<script>
+/* 注册 Service Worker：只在 https / localhost 下生效，file:// 打开时静默跳过 */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW 注册失败：', e));
+  });
+}
+</script>
+
+</body>
+</html>

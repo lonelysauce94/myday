@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的一天</title>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --ink: #2b2a27;
+    --ink-soft: #8a877f;
+    --line: #e8e6e0;
+    --accent: #4a7c59;
+    --accent-soft: #e3ede6;
+    --focus: #c9803a;
+    --focus-soft: #f7ead9;
+    --danger: #b5543b;
+    --now: #d94f3d;
+    --block: #eef3ef;
+    --block-border: #9dbba7;
+    --done: #b9b6ae;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    flex: none;
+  }
+  header h1 { font-size: 1.15rem; font-weight: 600; }
+  .date-nav { display: flex; align-items: center; gap: 6px; }
+  .date-nav button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--ink);
+  }
+  .date-nav button:hover { background: var(--bg); }
+  .date-nav .today-btn { color: var(--accent); font-weight: 600; }
+  #dateLabel { font-size: 1rem; font-weight: 600; min-width: 200px; text-align: center; }
+  #dateLabel .weekday { color: var(--ink-soft); font-weight: 400; margin-left: 6px; }
+  .spacer { flex: 1; }
+  .range-ctl { display: flex; align-items: center; gap: 4px; color: var(--ink-soft); font-size: 0.85rem; }
+  .range-ctl select {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 2px 4px;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 0.85rem;
+  }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* ---------- left panel ---------- */
+  #left {
+    width: 330px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+    min-height: 0;
+  }
+  #left section { padding: 12px 14px; }
+  #left h2 {
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #focusSection { border-bottom: 1px solid var(--line); background: #fdfaf5; }
+  #focusList { display: flex; flex-direction: column; gap: 6px; }
+  .focus-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--focus-soft);
+    border: 1px solid #ecd9bd;
+    border-radius: var(--radius);
+    font-weight: 500;
+    cursor: grab;
+    user-select: none;
+  }
+  .focus-item:active { cursor: grabbing; }
+  .focus-item.done { text-decoration: line-through; color: var(--done); font-weight: 400; }
+  .focus-empty { color: var(--ink-soft); font-size: 0.85rem; padding: 4px 2px; }
+  .focus-num { color: var(--focus); font-weight: 700; font-size: 0.85rem; }
+
+  #inboxSection { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #addRow { display: flex; gap: 8px; margin-bottom: 10px; }
+  #addInput {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+  }
+  #addInput:focus { border-color: var(--accent); background: var(--panel); }
+  #addBtn {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 0 16px;
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+  #todoList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .todo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    cursor: grab;
+    user-select: none;
+  }
+  .todo:active { cursor: grabbing; }
+  .todo.dragging, .focus-item.dragging { opacity: 0.4; }
+  #dropIndicator {
+    height: 0;
+    border-top: 2px solid var(--accent);
+    border-radius: 1px;
+    margin: -4px 0;
+    pointer-events: none;
+  }
+  .rename-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--panel);
+    outline: none;
+  }
+  .todo .title { flex: 1; word-break: break-all; }
+  .todo.done .title { text-decoration: line-through; color: var(--done); }
+  .todo .tag {
+    font-size: 0.7rem;
+    color: var(--focus);
+    background: var(--focus-soft);
+    border-radius: 5px;
+    padding: 1px 5px;
+    flex: none;
+  }
+  .todo .sched-tag { color: var(--accent); background: var(--accent-soft); }
+  .icon-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    padding: 2px 4px;
+    border-radius: 6px;
+    flex: none;
+    line-height: 1;
+  }
+  .icon-btn:hover { background: var(--bg); color: var(--ink); }
+  .icon-btn.star-on { color: var(--focus); }
+  .check {
+    width: 18px; height: 18px;
+    border: 1.6px solid var(--ink-soft);
+    border-radius: 6px;
+    cursor: pointer;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    color: transparent;
+    background: var(--panel);
+  }
+  .check.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #doneSection { border-top: 1px solid var(--line); }
+  #doneHeader { cursor: pointer; }
+  #doneHeader .count { color: var(--ink-soft); font-weight: 400; }
+  #doneList { display: none; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; }
+  #doneList.open { display: flex; }
+  #clearDone {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    background: none; border: none; cursor: pointer;
+  }
+  #clearDone:hover { color: var(--danger); }
+  .hint { font-size: 0.78rem; color: var(--ink-soft); padding: 8px 2px 0; }
+
+  /* ---------- timeline ---------- */
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 10px 16px 14px; }
+  #timeline {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    border-radius: var(--radius);
+  }
+  .hour-row {
+    position: absolute;
+    left: 0; right: 0;
+    border-top: 1px solid var(--line);
+    display: flex;
+  }
+  .hour-row .hlabel {
+    width: 48px;
+    flex: none;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    transform: translateY(-55%);
+    background: var(--bg);
+    padding-right: 8px;
+    text-align: right;
+  }
+  .half-line {
+    position: absolute;
+    left: 48px; right: 0;
+    border-top: 1px dashed #efede8;
+  }
+  #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; }
+  #nowLine {
+    position: absolute;
+    left: 40px; right: 0;
+    border-top: 2px solid var(--now);
+    z-index: 5;
+    pointer-events: none;
+  }
+  #nowLine::before {
+    content: "";
+    position: absolute;
+    left: -5px; top: -5px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--now);
+  }
+  .block {
+    position: absolute;
+    left: 0;
+    background: var(--block);
+    border: 1px solid var(--block-border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 3px 8px;
+    font-size: 0.85rem;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    z-index: 2;
+  }
+  .block:active { cursor: grabbing; }
+  .block.done {
+    background: #f2f1ee;
+    border-color: var(--line);
+    border-left-color: var(--done);
+    color: var(--done);
+  }
+  .block.done .b-title { text-decoration: line-through; }
+  .block.focus-block { border-left-color: var(--focus); background: var(--focus-soft); border-color: #ecd9bd; }
+  .block.selected { box-shadow: 0 0 0 2px var(--accent); z-index: 4; }
+  .block .b-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .block .b-time { font-size: 0.7rem; color: var(--ink-soft); white-space: nowrap; }
+  .resize-handle {
+    position: absolute;
+    left: 0; right: 0; bottom: -3px;
+    height: 8px;
+    cursor: ns-resize;
+  }
+  #dropGhost {
+    position: absolute;
+    left: 0; right: 0;
+    background: rgba(74,124,89,0.15);
+    border: 1.5px dashed var(--accent);
+    border-radius: 8px;
+    display: none;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* ---------- notes panel ---------- */
+  #notesPanel {
+    width: 250px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    padding: 12px 14px;
+    min-height: 0;
+  }
+  #notesPanel h2 {
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  #notesArea {
+    flex: 1;
+    resize: none;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    min-height: 0;
+  }
+  #notesArea::placeholder { color: var(--ink-soft); }
+
+  /* ---------- block action bar ---------- */
+  #blockMenu {
+    position: absolute;
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    padding: 6px;
+    z-index: 20;
+    gap: 4px;
+    align-items: center;
+  }
+  #blockMenu.open { display: flex; }
+  #blockMenu button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 7px;
+    padding: 4px 9px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  #blockMenu button:hover { background: var(--bg); }
+  #blockMenu .m-danger { color: var(--danger); }
+  #blockMenu .m-dur { color: var(--ink-soft); font-size: 0.8rem; padding: 0 2px; }
+
+  #emptyHint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+
+  #dragPill {
+    position: fixed;
+    z-index: 100;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    pointer-events: none;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.is-dragging { cursor: grabbing; }
+  body.is-dragging * { cursor: grabbing !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>我的一天</h1>
+  <div class="date-nav">
+    <button id="prevDay">‹</button>
+    <button id="todayBtn" class="today-btn">今天</button>
+    <button id="nextDay">›</button>
+  </div>
+  <div id="dateLabel"></div>
+  <div class="spacer"></div>
+  <div class="range-ctl">
+    显示 <select id="dayStart"></select> — <select id="dayEnd"></select>
+  </div>
+</header>
+
+<main>
+  <div id="left">
+    <section id="focusSection">
+      <h2>★ 今日焦点（最多 3 件）</h2>
+      <div id="focusList"></div>
+    </section>
+
+    <section id="inboxSection">
+      <h2>待办清单</h2>
+      <div id="addRow">
+        <input id="addInput" type="text" placeholder="想到什么记下来，回车添加" autocomplete="off">
+        <button id="addBtn" title="添加">+</button>
+      </div>
+      <div id="todoList"></div>
+      <div class="hint">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点。</div>
+    </section>
+
+    <section id="doneSection">
+      <h2 id="doneHeader">✓ 已完成 <span class="count" id="doneCount">0</span>
+        <button id="clearDone" title="清空已完成">清空</button>
+      </h2>
+      <div id="doneList"></div>
+    </section>
+  </div>
+
+  <div id="right">
+    <div id="timeline">
+      <div id="hourRows"></div>
+      <div id="blocksArea"></div>
+      <div id="dropGhost"></div>
+      <div id="nowLine"></div>
+      <div id="emptyHint">双击空白处快速安排，或从左边拖任务过来</div>
+    </div>
+  </div>
+
+  <div id="notesPanel">
+    <h2>✎ 随手记</h2>
+    <textarea id="notesArea" placeholder="想法、灵感、备忘……写在这里，自动保存。"></textarea>
+  </div>
+</main>
+
+<div id="blockMenu"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------------- state ---------------- */
+  const STORE_KEY = 'myday.v1';
+  const SNAP = 30; // minutes
+
+  const defaults = { tasks: [], notes: '', settings: { dayStart: 7, dayEnd: 23 } };
+  let state = load();
+  let viewDate = todayStr();          // 'YYYY-MM-DD' currently shown on timeline
+  let selectedBlockId = null;
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return structuredClone(defaults);
+      const s = JSON.parse(raw);
+      s.settings = Object.assign({}, defaults.settings, s.settings);
+      s.tasks = s.tasks || [];
+      return s;
+    } catch { return structuredClone(defaults); }
+  }
+  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+  function todayStr(d = new Date()) {
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  function uid() { return Math.random().toString(36).slice(2, 9) + Date.now().toString(36); }
+  function fmtTime(min) {
+    const p = n => String(n).padStart(2, '0');
+    return `${p(Math.floor(min / 60))}:${p(min % 60)}`;
+  }
+
+  /* -------- rollover: 昨天没做完的排程任务，收回清单并标"顺延" -------- */
+  (function rollover() {
+    const today = todayStr();
+    let changed = false;
+    for (const t of state.tasks) {
+      if (t.scheduledDate && t.scheduledDate < today && !t.done) {
+        t.scheduledDate = null;
+        t.startMin = null;
+        t.carried = true;
+        changed = true;
+      }
+    }
+    if (changed) save();
+  })();
+
+  /* -------- migrate: 旧数据没有手动排序字段，按原来的显示顺序补上 -------- */
+  (function migrateOrder() {
+    if (state.tasks.every(t => t.order != null)) return;
+    const sorted = [...state.tasks].sort((a, b) =>
+      (b.focus - a.focus) || ((b.carried ? 1 : 0) - (a.carried ? 1 : 0)) || (a.createdAt - b.createdAt));
+    sorted.forEach((t, i) => { t.order = i; });
+    save();
+  })();
+  function nextOrder() {
+    return state.tasks.reduce((m, t) => Math.max(m, t.order ?? 0), 0) + 1;
+  }
+
+  /* ---------------- header / date nav ---------------- */
+  const WEEKDAYS = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+  function renderDateLabel() {
+    const d = new Date(viewDate + 'T00:00:00');
+    const rel = viewDate === todayStr() ? '' :
+      (viewDate === todayStr(new Date(Date.now() + 864e5)) ? '（明天）' :
+       viewDate === todayStr(new Date(Date.now() - 864e5)) ? '（昨天）' : '');
+    document.getElementById('dateLabel').innerHTML =
+      `${d.getMonth() + 1}月${d.getDate()}日${rel}<span class="weekday">${WEEKDAYS[d.getDay()]}</span>`;
+  }
+  function shiftDay(n) {
+    const d = new Date(viewDate + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    viewDate = todayStr(d);
+    closeMenu();
+    renderAll();
+  }
+  document.getElementById('prevDay').onclick = () => shiftDay(-1);
+  document.getElementById('nextDay').onclick = () => shiftDay(1);
+  document.getElementById('todayBtn').onclick = () => { viewDate = todayStr(); closeMenu(); renderAll(); };
+
+  /* ---------------- day range selects ---------------- */
+  const selStart = document.getElementById('dayStart');
+  const selEnd = document.getElementById('dayEnd');
+  for (let h = 0; h <= 12; h++) selStart.add(new Option(`${h}:00`, h));
+  for (let h = 12; h <= 24; h++) selEnd.add(new Option(`${h}:00`, h));
+  selStart.value = state.settings.dayStart;
+  selEnd.value = state.settings.dayEnd;
+  selStart.onchange = () => {
+    state.settings.dayStart = +selStart.value;
+    if (state.settings.dayEnd <= state.settings.dayStart) {
+      state.settings.dayEnd = state.settings.dayStart + 1;
+      selEnd.value = state.settings.dayEnd;
+    }
+    save(); renderAll();
+  };
+  selEnd.onchange = () => {
+    state.settings.dayEnd = +selEnd.value;
+    if (state.settings.dayStart >= state.settings.dayEnd) {
+      state.settings.dayStart = state.settings.dayEnd - 1;
+      selStart.value = state.settings.dayStart;
+    }
+    save(); renderAll();
+  };
+
+  /* ---------------- add task ---------------- */
+  const addInput = document.getElementById('addInput');
+  function addTask() {
+    const title = addInput.value.trim();
+    if (!title) return;
+    state.tasks.push({
+      id: uid(), title, done: false, focus: false,
+      scheduledDate: null, startMin: null, durMin: 60,
+      carried: false, createdAt: Date.now(), order: nextOrder()
+    });
+    addInput.value = '';
+    save(); renderAll();
+  }
+  addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  document.getElementById('addBtn').onclick = addTask;
+
+  /* ---------------- task ops ---------------- */
+  function task(id) { return state.tasks.find(t => t.id === id); }
+  function toggleDone(id) { const t = task(id); if (t) { t.done = !t.done; save(); renderAll(); } }
+  function toggleFocus(id) {
+    const t = task(id); if (!t) return;
+    if (!t.focus && state.tasks.filter(x => x.focus && !x.done).length >= 3) {
+      alert('今日焦点最多 3 件 —— 先完成或取消一件吧。');
+      return;
+    }
+    t.focus = !t.focus; save(); renderAll();
+  }
+  function removeTask(id) {
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    if (selectedBlockId === id) closeMenu();
+    save(); renderAll();
+  }
+  function unschedule(id) {
+    const t = task(id); if (!t) return;
+    t.scheduledDate = null; t.startMin = null;
+    closeMenu(); save(); renderAll();
+  }
+
+  /* ---------------- rename ---------------- */
+  function startRename(t, span) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = t.title;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const commit = () => {
+      if (finished) return;
+      finished = true;
+      const v = input.value.trim();
+      if (v) { t.title = v; save(); }
+      renderAll();
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') { finished = true; renderAll(); }
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('mousedown', e => e.stopPropagation());
+    input.addEventListener('dblclick', e => e.stopPropagation());
+  }
+  function renameTitleSpan(t, span) {
+    span.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      startRename(t, span);
+    });
+    span.title = '双击改名';
+  }
+
+  /* ---------------- left panel render ---------------- */
+  function renderFocus() {
+    const list = document.getElementById('focusList');
+    list.innerHTML = '';
+    const items = state.tasks.filter(t => t.focus).sort((a, b) => a.order - b.order);
+    if (!items.length) {
+      list.innerHTML = '<div class="focus-empty">今天最重要的 1–3 件事是什么？点任务旁的 ★ 选出来。</div>';
+      return;
+    }
+    items.forEach((t, i) => {
+      const el = document.createElement('div');
+      el.className = 'focus-item' + (t.done ? ' done' : '');
+      el.dataset.id = t.id;
+      el.innerHTML = `<span class="focus-num">${i + 1}</span>`;
+      el.addEventListener('mousedown', e => {
+        if (e.target.closest('.icon-btn, .check, .rename-input')) return;
+        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.focus-item' });
+      });
+      const chk = makeCheck(t);
+      const span = document.createElement('span');
+      span.textContent = t.title;
+      span.style.flex = '1';
+      renameTitleSpan(t, span);
+      const un = iconBtn('★', '取消焦点', () => toggleFocus(t.id));
+      un.classList.add('star-on');
+      el.append(chk, span, un);
+      list.appendChild(el);
+    });
+  }
+
+  function makeCheck(t) {
+    const chk = document.createElement('div');
+    chk.className = 'check' + (t.done ? ' on' : '');
+    chk.textContent = '✓';
+    chk.title = t.done ? '标记未完成' : '标记完成';
+    chk.onclick = () => toggleDone(t.id);
+    return chk;
+  }
+  function iconBtn(txt, title, fn) {
+    const b = document.createElement('button');
+    b.className = 'icon-btn';
+    b.textContent = txt;
+    b.title = title;
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    return b;
+  }
+
+  function renderTodos() {
+    const list = document.getElementById('todoList');
+    list.innerHTML = '';
+    const pending = state.tasks
+      .filter(t => !t.done)
+      .sort((a, b) => a.order - b.order);
+    for (const t of pending) {
+      const el = document.createElement('div');
+      el.className = 'todo';
+      el.dataset.id = t.id;
+      el.addEventListener('mousedown', e => {
+        if (e.target.closest('.icon-btn, .check, .rename-input')) return;
+        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.todo' });
+      });
+
+      const chk = makeCheck(t);
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = t.title;
+      renameTitleSpan(t, title);
+      el.append(chk, title);
+      if (t.carried) {
+        const tag = document.createElement('span');
+        tag.className = 'tag'; tag.textContent = '顺延'; tag.title = '之前没做完，顺延过来的';
+        el.appendChild(tag);
+      }
+      if (t.scheduledDate) {
+        const tag = document.createElement('span');
+        tag.className = 'tag sched-tag';
+        tag.textContent = (t.scheduledDate === todayStr() ? '今天 ' :
+                           t.scheduledDate === viewDate ? '' :
+                           t.scheduledDate.slice(5).replace('-', '/') + ' ') + fmtTime(t.startMin);
+        el.appendChild(tag);
+      }
+      const star = iconBtn('★', t.focus ? '取消焦点' : '设为今日焦点', () => toggleFocus(t.id));
+      if (t.focus) star.classList.add('star-on');
+      const del = iconBtn('✕', '删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(t.id); });
+      el.append(star, del);
+      list.appendChild(el);
+    }
+  }
+
+  function renderDone() {
+    const doneTasks = state.tasks.filter(t => t.done);
+    document.getElementById('doneCount').textContent = doneTasks.length;
+    const list = document.getElementById('doneList');
+    list.innerHTML = '';
+    for (const t of doneTasks) {
+      const el = document.createElement('div');
+      el.className = 'todo done';
+      const chk = makeCheck(t);
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = t.title;
+      renameTitleSpan(t, title);
+      el.append(chk, title, iconBtn('✕', '删除', () => removeTask(t.id)));
+      list.appendChild(el);
+    }
+  }
+  document.getElementById('doneHeader').onclick = () =>
+    document.getElementById('doneList').classList.toggle('open');
+  document.getElementById('clearDone').onclick = e => {
+    e.stopPropagation();
+    if (confirm('清空所有已完成任务？')) {
+      state.tasks = state.tasks.filter(t => !t.done);
+      save(); renderAll();
+    }
+  };
+
+  /* ---------------- timeline ---------------- */
+  const timeline = document.getElementById('timeline');
+  const hourRows = document.getElementById('hourRows');
+  const blocksArea = document.getElementById('blocksArea');
+  const ghost = document.getElementById('dropGhost');
+  const nowLine = document.getElementById('nowLine');
+  let dragDur = 60; // duration of task being dragged, for ghost sizing
+
+  const dayStartMin = () => state.settings.dayStart * 60;
+  const dayEndMin = () => state.settings.dayEnd * 60;
+  const daySpan = () => dayEndMin() - dayStartMin();
+  const minToPct = m => (m - dayStartMin()) / daySpan() * 100;
+
+  function renderHours() {
+    hourRows.innerHTML = '';
+    for (let h = state.settings.dayStart; h <= state.settings.dayEnd; h++) {
+      const row = document.createElement('div');
+      row.className = 'hour-row';
+      row.style.top = minToPct(h * 60) + '%';
+      row.innerHTML = `<span class="hlabel">${h}:00</span>`;
+      hourRows.appendChild(row);
+      if (h < state.settings.dayEnd) {
+        const half = document.createElement('div');
+        half.className = 'half-line';
+        half.style.top = minToPct(h * 60 + 30) + '%';
+        hourRows.appendChild(half);
+      }
+    }
+  }
+
+  function overlapColumns(items) {
+    // assign column index to overlapping blocks so they sit side by side
+    const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.durMin - b.durMin);
+    const cols = [];
+    for (const t of sorted) {
+      let c = 0;
+      while (cols[c] && cols[c] > t.startMin) c++;
+      cols[c] = t.startMin + t.durMin;
+      t._col = c;
+    }
+    const groups = new Map();
+    for (const t of sorted) {
+      let maxCol = 0;
+      for (const o of sorted) {
+        if (o.startMin < t.startMin + t.durMin && t.startMin < o.startMin + o.durMin)
+          maxCol = Math.max(maxCol, o._col);
+      }
+      groups.set(t.id, maxCol + 1);
+    }
+    return groups;
+  }
+
+  function renderBlocks() {
+    blocksArea.innerHTML = '';
+    const items = state.tasks.filter(t => t.scheduledDate === viewDate && t.startMin != null);
+    document.getElementById('emptyHint').style.display = items.length ? 'none' : 'flex';
+    const totalCols = overlapColumns(items);
+    for (const t of items) {
+      const el = document.createElement('div');
+      el.className = 'block'
+        + (t.done ? ' done' : '')
+        + (t.focus ? ' focus-block' : '')
+        + (t.id === selectedBlockId ? ' selected' : '');
+      const n = totalCols.get(t.id) || 1;
+      const w = 100 / n;
+      el.style.top = minToPct(t.startMin) + '%';
+      el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';
+      el.style.left = (t._col * w) + '%';
+      el.style.width = `calc(${w}% - 4px)`;
+      el.dataset.id = t.id;
+      el.innerHTML = `<span class="b-title">${escapeHtml(t.title)}</span>` +
+        `<span class="b-time">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}</span>`;
+
+      el.addEventListener('mousedown', e => {
+        const r = el.getBoundingClientRect();
+        beginDrag(e, t, { offsetPx: e.clientY - r.top, sourceEl: el });
+      });
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        if (justDragged) { justDragged = false; return; }
+        openMenu(t.id, el);
+      });
+      el.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        renameByPrompt(t.id);
+      });
+
+      const handle = document.createElement('div');
+      handle.className = 'resize-handle';
+      handle.draggable = false;
+      handle.addEventListener('mousedown', e => startResize(e, t));
+      el.appendChild(handle);
+      blocksArea.appendChild(el);
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ------- resize ------- */
+  function startResize(e, t) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = blocksArea.getBoundingClientRect();
+    const move = ev => {
+      const min = dayStartMin() + (ev.clientY - rect.top) / rect.height * daySpan();
+      let dur = Math.round((min - t.startMin) / SNAP) * SNAP;
+      dur = Math.max(SNAP, Math.min(dur, dayEndMin() - t.startMin));
+      if (dur !== t.durMin) { t.durMin = dur; renderBlocks(); }
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      save(); renderAll();
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  /* ------- pointer-based drag & drop scheduling ------- */
+  let justDragged = false;
+
+  function yToSnappedMin(clientY) {
+    const rect = blocksArea.getBoundingClientRect();
+    const raw = dayStartMin() + (clientY - rect.top) / rect.height * daySpan();
+    let m = Math.round(raw / SNAP) * SNAP;
+    return Math.max(dayStartMin(), Math.min(m, dayEndMin() - SNAP));
+  }
+  function overTimeline(x, y) {
+    const r = timeline.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  function showGhostAt(clientY) {
+    const start = yToSnappedMin(clientY);
+    const dur = Math.min(dragDur, dayEndMin() - start);
+    ghost.style.display = 'block';
+    ghost.style.top = minToPct(start) + '%';
+    ghost.style.height = (dur / daySpan() * 100) + '%';
+    ghost.style.left = '52px';
+    ghost.style.right = '4px';
+  }
+  function hideGhost() { ghost.style.display = 'none'; }
+
+  /* 列表内排序的插入指示线 */
+  const dropIndicator = document.createElement('div');
+  dropIndicator.id = 'dropIndicator';
+  function overRect(x, y, el) {
+    const r = el.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  // 返回应插入到哪个元素之前（null = 末尾），排除正在拖的那个
+  function listDropTarget(listEl, itemSel, clientY, dragId) {
+    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== dragId);
+    for (const el of items) {
+      const r = el.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return el;
+    }
+    return null;
+  }
+  function applyReorder(t, listEl, itemSel, beforeEl) {
+    const items = [...listEl.querySelectorAll(itemSel)].filter(el => el.dataset.id !== t.id);
+    const idx = beforeEl ? items.indexOf(beforeEl) : items.length;
+    const prev = idx > 0 ? task(items[idx - 1].dataset.id) : null;
+    const next = idx < items.length ? task(items[idx].dataset.id) : null;
+    // 在全局顺序里重新插入并整体重编号，避免 order 出现并列
+    const all = state.tasks.filter(x => x.id !== t.id).sort((a, b) => a.order - b.order);
+    let insertIdx;
+    if (next) insertIdx = all.indexOf(next);
+    else if (prev) insertIdx = all.indexOf(prev) + 1;
+    else insertIdx = all.length;
+    all.splice(insertIdx, 0, t);
+    all.forEach((x, i) => { x.order = i; });
+    save(); renderAll();
+  }
+
+  function beginDrag(e, t, opts) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const offsetPx = opts.offsetPx || 0;
+    let dragging = false;
+    let pill = null;
+    let overList = false;   // 当前是否悬停在来源列表上（排序模式）
+
+    const move = ev => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+        dragging = true;
+        dragDur = t.durMin || 60;
+        closeMenu();
+        document.body.classList.add('is-dragging');
+        if (opts.sourceEl) opts.sourceEl.classList.add('dragging');
+        pill = document.createElement('div');
+        pill.id = 'dragPill';
+        pill.textContent = t.title;
+        document.body.appendChild(pill);
+      }
+      pill.style.left = (ev.clientX + 12) + 'px';
+      pill.style.top = (ev.clientY + 10) + 'px';
+      overList = false;
+      if (overTimeline(ev.clientX, ev.clientY)) {
+        showGhostAt(ev.clientY - offsetPx);
+        dropIndicator.remove();
+      } else {
+        hideGhost();
+        if (opts.listEl && overRect(ev.clientX, ev.clientY, opts.listEl)) {
+          overList = true;
+          const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);
+          if (before) opts.listEl.insertBefore(dropIndicator, before);
+          else opts.listEl.appendChild(dropIndicator);
+        } else {
+          dropIndicator.remove();
+        }
+      }
+    };
+    const up = ev => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      if (!dragging) return;
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }, 0);
+      document.body.classList.remove('is-dragging');
+      if (pill) pill.remove();
+      hideGhost();
+      dropIndicator.remove();
+      if (opts.sourceEl) opts.sourceEl.classList.remove('dragging');
+      if (overTimeline(ev.clientX, ev.clientY)) {
+        t.scheduledDate = viewDate;
+        t.startMin = yToSnappedMin(ev.clientY - offsetPx);
+        t.durMin = Math.min(t.durMin || 60, dayEndMin() - t.startMin);
+        save(); renderAll();
+      } else if (overList && opts.listEl) {
+        const before = listDropTarget(opts.listEl, opts.itemSel, ev.clientY, t.id);
+        applyReorder(t, opts.listEl, opts.itemSel, before);
+      }
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  /* ------- double-click quick create ------- */
+  timeline.addEventListener('dblclick', e => {
+    if (e.target.closest('.block')) return;
+    const start = yToSnappedMin(e.clientY);
+    const title = prompt(`在 ${fmtTime(start)} 安排什么？`);
+    if (!title || !title.trim()) return;
+    state.tasks.push({
+      id: uid(), title: title.trim(), done: false, focus: false,
+      scheduledDate: viewDate, startMin: start,
+      durMin: Math.min(60, dayEndMin() - start),
+      carried: false, createdAt: Date.now(), order: nextOrder()
+    });
+    save(); renderAll();
+  });
+
+  /* ------- block menu ------- */
+  const menu = document.getElementById('blockMenu');
+  function openMenu(id, blockEl) {
+    const t = task(id);
+    if (!t) return;
+    selectedBlockId = id;
+    menu.innerHTML = '';
+    const mkBtn = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = ev => { ev.stopPropagation(); fn(); };
+      menu.appendChild(b);
+    };
+    mkBtn(t.done ? '↩ 未完成' : '✓ 完成', () => { toggleDone(id); closeMenu(); });
+    const durLabel = document.createElement('span');
+    durLabel.className = 'm-dur';
+    durLabel.textContent = `${t.durMin >= 60 ? Math.floor(t.durMin / 60) + 'h' : ''}${t.durMin % 60 ? t.durMin % 60 + 'm' : ''}`;
+    mkBtn('−30m', () => {
+      t.durMin = Math.max(SNAP, t.durMin - 30);
+      save(); renderAll(); openMenuReposition(id);
+    });
+    menu.appendChild(durLabel);
+    mkBtn('+30m', () => {
+      t.durMin = Math.min(t.durMin + 30, dayEndMin() - t.startMin);
+      save(); renderAll(); openMenuReposition(id);
+    });
+    mkBtn('✎ 改名', () => renameByPrompt(id));
+    mkBtn('移回清单', () => unschedule(id));
+    mkBtn('删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(id); }, 'm-danger');
+
+    positionMenu(blockEl);
+    menu.classList.add('open');
+    renderBlocks();
+  }
+  function renameByPrompt(id) {
+    const t = task(id); if (!t) return;
+    const v = prompt('新的名字：', t.title);
+    if (v && v.trim()) { t.title = v.trim(); save(); renderAll(); }
+  }
+  function openMenuReposition(id) {
+    const el = blocksArea.querySelector(`.block[data-id="${id}"]`);
+    if (el) openMenu(id, el);
+  }
+  function positionMenu(blockEl) {
+    const r = blockEl.getBoundingClientRect();
+    menu.style.left = Math.min(r.left, window.innerWidth - 380) + 'px';
+    menu.style.top = Math.min(r.bottom + 6, window.innerHeight - 50) + 'px';
+  }
+  function closeMenu() {
+    selectedBlockId = null;
+    menu.classList.remove('open');
+    renderBlocks();
+  }
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target) && !e.target.closest('.block')) closeMenu();
+  });
+
+  /* ------- notes ------- */
+  const notesArea = document.getElementById('notesArea');
+  notesArea.value = state.notes || '';
+  notesArea.addEventListener('input', () => {
+    state.notes = notesArea.value;
+    save();
+  });
+
+  /* ------- now line ------- */
+  function renderNow() {
+    const now = new Date();
+    const isToday = viewDate === todayStr();
+    const m = now.getHours() * 60 + now.getMinutes();
+    if (!isToday || m < dayStartMin() || m > dayEndMin()) {
+      nowLine.style.display = 'none';
+      return;
+    }
+    nowLine.style.display = 'block';
+    nowLine.style.top = minToPct(m) + '%';
+  }
+  setInterval(renderNow, 60 * 1000);
+
+  /* ---------------- render all ---------------- */
+  function renderAll() {
+    renderDateLabel();
+    renderFocus();
+    renderTodos();
+    renderDone();
+    renderHours();
+    renderBlocks();
+    renderNow();
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
