@@ -447,6 +447,28 @@
     border-color: var(--line);
     border-left-color: var(--done);
   }
+  .block.missed {
+    background: repeating-linear-gradient(-45deg, #f5f2ee 0 6px, #f0ece6 6px 12px);
+    border: 1px dashed var(--line);
+    border-left: 4px dashed #cbb1a6;
+    color: var(--ink-faint);
+    box-shadow: none;
+    opacity: 0.75;
+    cursor: default;
+    z-index: 1;
+  }
+  .block.missed .b-title { font-weight: 500; color: var(--ink-soft); }
+  .block.missed .b-time { color: var(--ink-faint); }
+  .miss-tag {
+    margin-left: 6px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: #a96a58;
+    border: 1px solid #e2c8bf;
+    border-radius: 4px;
+    padding: 0 4px;
+    vertical-align: 1px;
+  }
   .block.selected { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); z-index: 4; }
   .block .b-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .block .b-time {
@@ -1196,6 +1218,7 @@
   /* ---------------- state ---------------- */
   const STORE_KEY = 'myday.v1';
   const SNAP = 15; // minutes
+  let booted = false;   // 启动完成前，save() 只写本地：文件/云同步层此时还没初始化
 
   const defaults = { tasks: [], notes: '', journal: {}, reminders: {}, settings: { dayStart: 7, dayEnd: 23 } };
   let state = load();
@@ -1212,6 +1235,9 @@
   function save() {
     state.savedAt = Date.now();
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    // 启动阶段（顺延/数据迁移）会调 save()，但文件/云同步层还没初始化，
+    // 此时只落本地，等启动时的 syncFromFile / cloudSync 把较新的本地数据推上去。
+    if (!booted) return;
     scheduleFileWrite();
     scheduleCloudWrite();
   }
@@ -1226,12 +1252,18 @@
     return `${p(Math.floor(min / 60))}:${p(min % 60)}`;
   }
 
-  /* -------- rollover: 昨天没做完的排程任务，收回清单并标"顺延" -------- */
+  /* -------- rollover: 昨天没做完的排程任务，收回清单并标"顺延"，
+     并在原来那天留下一个只读"未完成"痕迹（收回后可自由排新时间，历史不丢） -------- */
   function rolloverTasks() {
     const today = todayStr();
     let changed = false;
     for (const t of state.tasks) {
       if (t.scheduledDate && t.scheduledDate < today && !t.done) {
+        if (t.startMin != null) {
+          t.missed = t.missed || [];
+          const dup = t.missed.some(m => m.date === t.scheduledDate && m.startMin === t.startMin);
+          if (!dup) t.missed.push({ date: t.scheduledDate, startMin: t.startMin, durMin: t.durMin || 60 });
+        }
         t.scheduledDate = null;
         t.startMin = null;
         t.carried = true;
@@ -1580,10 +1612,21 @@
 
   function renderBlocks() {
     blocksArea.innerHTML = '';
-    const items = state.tasks.filter(t => t.scheduledDate === viewDate && t.startMin != null);
+    const live = state.tasks.filter(t => t.scheduledDate === viewDate && t.startMin != null);
+    // 这一天没做完、已顺延走的排程，留一条只读痕迹（和已完成的方块并排显示）
+    const missed = [];
+    for (const t of state.tasks) {
+      for (const m of (t.missed || [])) {
+        if (m.date === viewDate)
+          missed.push({ id: `missed:${t.id}:${m.startMin}`, _missed: true,
+                        title: t.title, startMin: m.startMin, durMin: m.durMin || 60 });
+      }
+    }
+    const items = [...live, ...missed];
     document.getElementById('emptyHint').style.display = items.length ? 'none' : 'flex';
     const totalCols = overlapColumns(items);
     for (const t of items) {
+      if (t._missed) { renderMissedBlock(t, totalCols); continue; }
       const el = document.createElement('div');
       el.className = 'block'
         + (t.done ? ' done' : '')
@@ -1620,6 +1663,23 @@
       el.appendChild(handle);
       blocksArea.appendChild(el);
     }
+  }
+
+  // 只读的"未完成"痕迹方块：记录那天原本排了、但没做完的时段，纯展示，不可拖动/编辑
+  function renderMissedBlock(t, totalCols) {
+    const el = document.createElement('div');
+    el.className = 'block missed';
+    const n = totalCols.get(t.id) || 1;
+    const w = 100 / n;
+    el.style.top = minToPct(t.startMin) + '%';
+    el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';
+    el.style.left = (t._col * w) + '%';
+    el.style.width = `calc(${w}% - 4px)`;
+    el.title = `未完成 · 原定 ${fmtTime(t.startMin)}–${fmtTime(t.startMin + t.durMin)}，已顺延`;
+    el.innerHTML =
+      `<span class="b-title">${escapeHtml(t.title)}<span class="miss-tag">未完成</span></span>` +
+      `<span class="b-time">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}</span>`;
+    blocksArea.appendChild(el);
   }
 
   function escapeHtml(s) {
@@ -2863,6 +2923,7 @@
     closeSched();
   };
 
+  booted = true;   // 同步层已声明就绪，之后的 save() 可正常写文件/云
   renderAll();
   renderFsChip();
   initFileStorage();
