@@ -1173,7 +1173,7 @@
       <div id="rangeToast"></div>
       <div id="emptyHint">
         <span class="only-desktop">在空白处按住往下拖，画出一段时间；也可以从左边拖任务过来</span>
-        <span class="only-mobile-inline">按住空白往下拖画出一段时间；<br>或点上方「＋」把清单里的任务排进来；<br>双指上下拖 / 捏合可调显示时段</span>
+        <span class="only-mobile-inline">双击空白并往下拖，画出一段时间；<br>或点上方「＋」把清单里的任务排进来；<br>单指滑动平移、双指捏合缩放显示时段</span>
       </div>
     </div>
   </div>
@@ -2044,10 +2044,26 @@
     input.addEventListener('blur', commit);
   }
 
+  // 手机上画块改成「双击，第二下按住拖」：单指一划就画块的话，
+  // 想滑动看别的时段时全是误触。这里记双击的第一击。
+  let lastEmptyTap = { t: 0, y: 0 };
+  let touchDblAt = 0;   // 触屏双击我们自己处理过后，压掉浏览器可能补发的 dblclick
+
   timeline.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.block, .rem-flag, .rename-input, #railSplit')) return;
     e.preventDefault();
+    const isTouch = e.pointerType && e.pointerType !== 'mouse';
+    if (isTouch) {
+      const now = performance.now();
+      const isDouble = now - lastEmptyTap.t < 350 && Math.abs(e.clientY - lastEmptyTap.y) < 44;
+      if (!isDouble) {
+        lastEmptyTap = { t: now, y: e.clientY };
+        beginTimelinePan(e);          // 单指拖空白 = 平移显示时段
+        return;
+      }
+      lastEmptyTap = { t: 0, y: 0 };  // 双击已消费，别让紧接着的第三下又算双击
+    }
     const startClientY = e.clientY;
     const anchor = yToSnappedMin(startClientY);
     let creating = false;
@@ -2076,7 +2092,14 @@
     };
     const up = ev => {
       stop();
-      if (!creating) return;
+      if (!creating) {
+        // 触屏的双击不一定触发 dblclick，这里自己兜底：双击不拖 = 快建 1 小时
+        if (isTouch) {
+          touchDblAt = performance.now();
+          openBlockEditor(anchor, Math.min(60, dayEndMin() - anchor));
+        }
+        return;
+      }
       hideGhost();
       const [a, b] = range(ev.clientY);
       openBlockEditor(a, b - a);
@@ -2090,9 +2113,42 @@
   // 双击空白处也能快建：默认 1 小时，同样是就地输入
   timeline.addEventListener('dblclick', e => {
     if (e.target.closest('.block, .rem-flag, .rename-input, #railSplit')) return;
+    if (performance.now() - touchDblAt < 600) return;   // 触屏双击已在 pointerup 里处理过
     const start = yToSnappedMin(e.clientY);
     openBlockEditor(start, Math.min(60, dayEndMin() - start));
   });
+
+  /* ------- 手机：单指拖空白处 = 平移显示时段 ------- */
+  function beginTimelinePan(e) {
+    const rect = timeline.getBoundingClientRect();
+    const startY = e.clientY;
+    const base = dayStartMin();
+    const span = daySpan();
+    let moved = false;
+    const stop = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      touchDragCancels.delete(cancel);
+    };
+    const move = ev => {
+      if (!moved && Math.abs(ev.clientY - startY) < 6) return;
+      moved = true;
+      lastEmptyTap = { t: 0, y: 0 };   // 划动过就不算「双击的第一击」
+      // 内容跟着手指走：往下拖 → 露出更早的时段
+      applyRange(base - (ev.clientY - startY) / (rect.height || 1) * span, span);
+      showRangeToast();
+    };
+    const up = () => {
+      stop();
+      if (!moved) return;
+      save();
+      rangeToastTimer = setTimeout(() => rangeToast.classList.remove('show'), 700);
+    };
+    const cancel = () => stop();   // 第二根手指落下：双指手势接管，落盘交给它
+    touchDragCancels.add(cancel);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  }
 
   /* ------- 手机：双指调整显示时段 ------- */
   // 电脑上时段用顶栏下拉调，手机顶栏放不下，就直接在时间轴上调：
@@ -2109,6 +2165,23 @@
     rangeToast.textContent = `显示 ${state.settings.dayStart}:00 – ${state.settings.dayEnd}:00`;
     rangeToast.classList.add('show');
   };
+
+  // 把（分钟为单位的）起点和跨度落到整点、守住下拉框的取值范围
+  // （开始 0–12 点、结束 12–24 点、至少跨 2 小时），再写回设置并重画。
+  // 单指平移和双指捏合都走这里。
+  function applyRange(startFloatMin, spanFloatMin) {
+    const spanH = Math.max(2, Math.min(24, Math.round(spanFloatMin / 60)));
+    const lo = Math.max(0, 12 - spanH);
+    const hi = Math.min(12, 24 - spanH);
+    const sh = Math.max(lo, Math.min(hi, Math.round(startFloatMin / 60)));
+    const eh = sh + spanH;
+    if (sh === state.settings.dayStart && eh === state.settings.dayEnd) return;
+    state.settings.dayStart = sh;
+    state.settings.dayEnd = eh;
+    selStart.value = sh;
+    selEnd.value = eh;
+    renderHours(); renderBlocks(); renderReminders(); renderNow();
+  }
 
   timeline.addEventListener('touchstart', e => {
     if (e.touches.length !== 2) return;
@@ -2132,19 +2205,7 @@
     const span = pinch.span * pinch.gap / touchGap(e);
     // 平移 + 锚定：手势开始时两指中点对着的时刻，要一直跟着中点走
     const anchor = pinch.startMin + (pinch.mid - pinch.rect.top) / h * pinch.span;
-    const start = anchor - (touchMid(e) - pinch.rect.top) / h * span;
-    // 落到整点，并守住下拉框的取值范围（开始 0–12 点、结束 12–24 点、至少跨 2 小时）
-    const spanH = Math.max(2, Math.min(24, Math.round(span / 60)));
-    let sh = Math.max(0, Math.min(12, Math.round(start / 60)));
-    let eh = Math.max(12, Math.min(24, sh + spanH));
-    if (eh - sh < 2) sh = Math.max(0, eh - 2);
-    if (sh !== state.settings.dayStart || eh !== state.settings.dayEnd) {
-      state.settings.dayStart = sh;
-      state.settings.dayEnd = eh;
-      selStart.value = sh;
-      selEnd.value = eh;
-      renderHours(); renderBlocks(); renderReminders(); renderNow();
-    }
+    applyRange(anchor - (touchMid(e) - pinch.rect.top) / h * span, span);
     showRangeToast();
   }, { passive: false });
 
