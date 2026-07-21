@@ -722,55 +722,6 @@
   }
   .v-split:hover::after, .v-split.active::after { background: var(--accent-soft); }
 
-  /* ---------- 数据文件引导弹层 ---------- */
-  #fsOverlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(42, 40, 32, .35);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-  }
-  #fsOverlay.open { display: flex; }
-  .fs-card {
-    background: var(--card);
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
-    padding: 26px 28px;
-    width: 420px;
-    max-width: 92vw;
-  }
-  .fs-card h3 { font-size: 1.05rem; margin-bottom: 10px; }
-  .fs-card p { font-size: .86rem; color: var(--ink-soft); line-height: 1.7; margin-bottom: 18px; }
-  .fs-actions { display: flex; flex-direction: column; gap: 8px; }
-  .fs-actions button {
-    border: 1px solid var(--line);
-    background: var(--panel);
-    border-radius: 10px;
-    padding: 9px 14px;
-    font-size: .9rem;
-    color: var(--ink);
-    cursor: pointer;
-    transition: background .15s, border-color .15s;
-  }
-  .fs-actions button:hover { border-color: var(--ink-faint); }
-  .fs-actions button.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    font-weight: 600;
-  }
-  .fs-actions button.primary:hover { background: var(--accent-deep); }
-  .fs-actions button.fs-later {
-    border: none;
-    background: none;
-    color: var(--ink-faint);
-    font-size: .8rem;
-    margin-top: 2px;
-  }
-  .fs-actions button.fs-later:hover { color: var(--ink-soft); }
-
   /* ---------- block action bar ---------- */
   #blockMenu, #remMenu {
     position: absolute;
@@ -801,9 +752,8 @@
   #blockMenu .m-danger:hover, #remMenu .m-danger:hover { background: #f6e8e2; }
   #blockMenu .m-dur { color: var(--ink-soft); font-size: 0.78rem; padding: 0 3px; font-variant-numeric: tabular-nums; }
 
-  /* ---------- 数据文件 chip & menu ---------- */
-  #cloudChip,
-  #fsChip {
+  /* ---------- 云同步 chip & menu ---------- */
+  #cloudChip {
     border: 1px solid var(--line);
     background: var(--panel);
     border-radius: 999px;
@@ -817,11 +767,9 @@
     text-overflow: ellipsis;
     transition: border-color .15s, color .15s, background .15s;
   }
-  #cloudChip:hover, #fsChip:hover { border-color: var(--ink-faint); color: var(--ink); }
-  #cloudChip[data-state="on"], #fsChip[data-state="on"] { color: var(--accent-deep); border-color: var(--block-border); background: var(--accent-soft); }
-  #cloudChip[data-state="on"]:hover, #fsChip[data-state="on"]:hover { border-color: var(--accent); }
-  #cloudChip[data-state="prompt"], #fsChip[data-state="prompt"] { color: var(--focus-deep); border-color: var(--focus-line); background: var(--focus-soft); }
-  #cloudChip[data-state="prompt"]:hover, #fsChip[data-state="prompt"]:hover { border-color: var(--focus); }
+  #cloudChip:hover { border-color: var(--ink-faint); color: var(--ink); }
+  #cloudChip[data-state="on"] { color: var(--accent-deep); border-color: var(--block-border); background: var(--accent-soft); }
+  #cloudChip[data-state="on"]:hover { border-color: var(--accent); }
   /* 云同步特有状态：正在同步 / 离线待补传 */
   #cloudChip[data-state="syncing"] { color: var(--ink-soft); border-color: var(--line); background: var(--panel); }
   #cloudChip[data-state="offline"] { color: var(--focus-deep); border-color: var(--focus-line); background: var(--focus-soft); }
@@ -929,7 +877,6 @@
       padding-top: max(10px, env(safe-area-inset-top));
     }
     header h1 { display: none; }      /* 375px 放不下，标题让位给日期和同步状态 */
-    #fsChip { display: none; }        /* iOS 不支持本地文件 API，备份入口并进云同步菜单 */
     #cloudChip { max-width: 116px; }
     .range-ctl { display: none; }          /* 显示时段在电脑上调，设置会同步过来 */
     .spacer { display: none; }
@@ -1011,7 +958,6 @@
     #tabBar button .ti { font-size: 1.02rem; letter-spacing: 0; line-height: 1; }
     #tabBar button[aria-selected="true"] { color: var(--accent-deep); font-weight: 700; }
 
-    .fs-card { padding: 22px 20px; }
   }
 
   /* ---------- 排时间弹层（手机上代替「拖到时间轴」） ---------- */
@@ -1131,7 +1077,6 @@
     显示 <select id="dayStart"></select> — <select id="dayEnd"></select>
   </div>
   <button id="cloudChip" data-state="none">云同步</button>
-  <button id="fsChip" data-state="none">数据文件</button>
   <input id="importFile" type="file" accept=".json,application/json" hidden>
 </header>
 
@@ -1259,14 +1204,6 @@
   </div>
 </div>
 
-<div id="fsOverlay">
-  <div class="fs-card">
-    <h3 id="fsOvTitle"></h3>
-    <p id="fsOvDesc"></p>
-    <div class="fs-actions" id="fsOvActions"></div>
-  </div>
-</div>
-
 <script>
 (() => {
   'use strict';
@@ -1294,7 +1231,6 @@
     // 启动阶段（顺延/数据迁移）会调 save()，但文件/云同步层还没初始化，
     // 此时只落本地，等启动时的 syncFromFile / cloudSync 把较新的本地数据推上去。
     if (!booted) return;
-    scheduleFileWrite();
     scheduleCloudWrite();
   }
 
@@ -2335,50 +2271,7 @@
     document.addEventListener('pointerup', up);
   });
 
-  /* ---------------- 数据文件（Edge / Chrome 共用一份数据） ---------------- */
-  const FS_SUPPORTED = 'showSaveFilePicker' in window && 'showOpenFilePicker' in window;
-  let fileHandle = null;
-  let fileMtime = 0;
-  let fsState = 'none';        // none | prompt | on
-  let writeTimer = null;
-  let writing = false;
-  let writeQueued = false;
-
-  function idbOpen() {
-    return new Promise((res, rej) => {
-      const r = indexedDB.open('myday-fs', 1);
-      r.onupgradeneeded = () => r.result.createObjectStore('kv');
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
-    });
-  }
-  async function idbGet(key) {
-    const db = await idbOpen();
-    return new Promise((res, rej) => {
-      const g = db.transaction('kv').objectStore('kv').get(key);
-      g.onsuccess = () => { res(g.result); db.close(); };
-      g.onerror = () => { rej(g.error); db.close(); };
-    });
-  }
-  async function idbSet(key, val) {
-    const db = await idbOpen();
-    return new Promise((res, rej) => {
-      const tx = db.transaction('kv', 'readwrite');
-      tx.objectStore('kv').put(val, key);
-      tx.oncomplete = () => { res(); db.close(); };
-      tx.onerror = () => { rej(tx.error); db.close(); };
-    });
-  }
-  async function idbDel(key) {
-    const db = await idbOpen();
-    return new Promise((res, rej) => {
-      const tx = db.transaction('kv', 'readwrite');
-      tx.objectStore('kv').delete(key);
-      tx.oncomplete = () => { res(); db.close(); };
-      tx.onerror = () => { rej(tx.error); db.close(); };
-    });
-  }
-
+  /* ---------------- 数据的合并 / 替换（云同步和导入共用） ---------------- */
   function normalizeState(s) {
     s = (s && typeof s === 'object') ? s : {};
     s.settings = Object.assign({}, defaults.settings, s.settings);
@@ -2407,7 +2300,7 @@
       merged.notes = merged.notes + '\n────────\n' + other.notes;
     return merged;
   }
-  // 用另一份数据整体替换当前数据（来自文件或导入），并刷新界面
+  // 用另一份数据整体替换当前数据（来自云端或导入），并刷新界面
   function adoptState(s) {
     state = normalizeState(s);
     rolloverTasks();
@@ -2421,123 +2314,8 @@
     renderAll();
   }
 
-  // 返回值：对象 = 文件里的数据；null = 空文件；undefined = 内容损坏
-  async function readFileState() {
-    const f = await fileHandle.getFile();
-    fileMtime = f.lastModified;
-    const text = await f.text();
-    if (!text.trim()) return null;
-    try { return JSON.parse(text); } catch { return undefined; }
-  }
-  async function writeFileNow() {
-    if (!fileHandle || fsState !== 'on') return;
-    if (writing) { writeQueued = true; return; }
-    writing = true;
-    try {
-      const w = await fileHandle.createWritable();
-      await w.write(JSON.stringify(state, null, 2));
-      await w.close();
-      fileMtime = (await fileHandle.getFile()).lastModified;
-    } catch (e) {
-      console.warn('写入数据文件失败：', e);
-    } finally {
-      writing = false;
-      if (writeQueued) { writeQueued = false; writeFileNow(); }
-    }
-  }
-  function scheduleFileWrite() {
-    if (fsState !== 'on') return;
-    clearTimeout(writeTimer);
-    writeTimer = setTimeout(writeFileNow, 400);
-  }
-
-  // savedAt 新的一方说了算：文件更新就采用文件，本机更新就写回文件
-  async function syncFromFile() {
-    let s;
-    try { s = await readFileState(); } catch (e) { console.warn('读取数据文件失败：', e); return; }
-    if (s === null || s === undefined) { await writeFileNow(); return; }
-    if ((s.savedAt || 0) > (state.savedAt || 0)) adoptState(s);
-    else if ((state.savedAt || 0) > (s.savedAt || 0)) await writeFileNow();
-  }
-  async function checkExternalChange() {
-    if (fsState !== 'on' || !fileHandle || writing) return;
-    try {
-      const f = await fileHandle.getFile();
-      if (f.lastModified > fileMtime) await syncFromFile();
-    } catch { /* 文件被移动/删除时静默忽略 */ }
-  }
-  window.addEventListener('focus', checkExternalChange);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkExternalChange(); });
-
-  function pickerError(e) {
-    if (e && e.name === 'AbortError') return; // 用户取消
-    alert('浏览器拒绝了文件访问：' + (e && e.message ? e.message : e));
-  }
-  async function pickNewFile() {
-    try {
-      const h = await window.showSaveFilePicker({
-        suggestedName: '一日一页-数据.json',
-        types: [{ description: 'JSON 数据文件', accept: { 'application/json': ['.json'] } }]
-      });
-      fileHandle = h; fsState = 'on';
-      try { await idbSet('dataFile', h); } catch { /* 记不住也能用，下次重选 */ }
-      await writeFileNow();
-    } catch (e) { pickerError(e); }
-    renderFsChip();
-  }
-  async function pickExistingFile() {
-    try {
-      const [h] = await window.showOpenFilePicker({
-        types: [{ description: 'JSON 数据文件', accept: { 'application/json': ['.json'] } }]
-      });
-      if ((await h.requestPermission({ mode: 'readwrite' })) !== 'granted') return;
-      fileHandle = h; fsState = 'on';
-      const s = await readFileState();
-      if (s === undefined) {
-        alert('这个文件不是「一日一页」的数据文件。');
-        fileHandle = null; fsState = 'none';
-        renderFsChip();
-        return;
-      }
-      try { await idbSet('dataFile', h); } catch {}
-      if (s === null) await writeFileNow();   // 空文件：把当前数据写进去
-      else {
-        // 有数据：和本机数据合并（两边的任务都保留），并把合并结果写回文件
-        const localHasData = state.tasks.length || state.notes.trim() || Object.keys(state.journal || {}).length;
-        adoptState(localHasData ? mergeStates(state, s) : s);
-        await writeFileNow();
-      }
-    } catch (e) { pickerError(e); }
-    renderFsChip();
-  }
-  async function disconnectFile() {
-    clearTimeout(writeTimer);
-    fileHandle = null; fsState = 'none'; fileMtime = 0;
-    try { await idbDel('dataFile'); } catch {}
-    renderFsChip();
-  }
-  async function reconnect() {
-    try {
-      if ((await fileHandle.requestPermission({ mode: 'readwrite' })) === 'granted') {
-        fsState = 'on';
-        await syncFromFile();
-      }
-    } catch (e) { console.warn(e); }
-    renderFsChip();
-  }
-  async function initFileStorage() {
-    if (!FS_SUPPORTED) { renderFsChip(); return; }
-    try { fileHandle = (await idbGet('dataFile')) || null; } catch { fileHandle = null; }
-    if (!fileHandle) { renderFsChip(); return; }
-    let p = 'prompt';
-    try { p = await fileHandle.queryPermission({ mode: 'readwrite' }); } catch {}
-    if (p === 'granted') { fsState = 'on'; await syncFromFile(); }
-    else fsState = 'prompt';
-    renderFsChip();
-  }
-
   /* ---------------- 云同步（GitHub 私有 Gist，电脑 / iPhone 共用一份） ----------------
-     和数据文件走同一套规则：savedAt 新的一方说了算，首次连接时合并，两边任务都不丢。
+     savedAt 新的一方说了算，首次连接时合并，两边任务都不丢。
      断网不报错，改动照常存本机，联网后自动补传。 */
   const CLOUD_KEY = 'myday.cloud';
   const GIST_FILE = 'myday-data.json';
@@ -2796,103 +2574,12 @@
     } catch { alert('这个文件无法解析成数据。'); }
   };
 
-  /* ------- chip 与菜单 ------- */
-  const fsChip = document.getElementById('fsChip');
+  /* ------- 云同步下拉菜单的点击关闭 ------- */
   const fsMenu = document.getElementById('fsMenu');
-  function renderFsChip() {
-    fsChip.dataset.state = fsState;
-    if (fsState === 'on') {
-      fsChip.textContent = '● ' + (fileHandle ? fileHandle.name : '已连接');
-      fsChip.title = '数据已同步到本地文件，点击管理';
-    } else if (fsState === 'prompt') {
-      fsChip.textContent = '恢复文件连接';
-      fsChip.title = '点一下，恢复对数据文件的访问';
-    } else {
-      fsChip.textContent = FS_SUPPORTED ? '数据文件' : '备份';
-      fsChip.title = FS_SUPPORTED ? '把数据存到本地文件，Edge / Chrome 共用一份' : '导出 / 导入备份';
-    }
-    renderFsOverlay();
-  }
-  fsChip.onclick = e => {
-    e.stopPropagation();
-    if (fsState === 'prompt') { reconnect(); return; }
-    toggleFsMenu();
-  };
-  function toggleFsMenu() {
-    if (fsMenu.classList.contains('open')) { fsMenu.classList.remove('open'); return; }
-    fsMenu.innerHTML = '';
-    const mk = (label, fn, cls) => {
-      const b = document.createElement('button');
-      b.textContent = label;
-      if (cls) b.className = cls;
-      b.onclick = ev => { ev.stopPropagation(); fsMenu.classList.remove('open'); fn(); };
-      fsMenu.appendChild(b);
-    };
-    if (FS_SUPPORTED) {
-      if (fsState === 'on') {
-        mk('打开其他数据文件…', pickExistingFile);
-        mk('断开文件（改回仅本机存储）', disconnectFile, 'm-danger');
-      } else {
-        mk('新建数据文件…', pickNewFile);
-        mk('打开已有数据文件…', pickExistingFile);
-      }
-    }
-    mk('导出备份 (.json)', exportJson);
-    mk('导入备份…', () => importInput.click());
-    if (FS_SUPPORTED && fsState !== 'on') {
-      const note = document.createElement('div');
-      note.className = 'm-note';
-      note.textContent = '新建一次数据文件后，在另一个浏览器里「打开已有数据文件」选同一个文件，两边就共用一份数据。';
-      fsMenu.appendChild(note);
-    }
-    const r = fsChip.getBoundingClientRect();
-    fsMenu.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
-    fsMenu.style.top = (r.bottom + 6) + 'px';
-    fsMenu.classList.add('open');
-  }
   document.addEventListener('click', e => {
-    if (!fsMenu.contains(e.target) && e.target !== fsChip && e.target !== cloudChip)
+    if (!fsMenu.contains(e.target) && e.target !== cloudChip)
       fsMenu.classList.remove('open');
   });
-
-  /* ------- 启动引导弹层：把每个浏览器都引到同一个数据文件 ------- */
-  let overlayDismissed = false;
-  const fsOverlay = document.getElementById('fsOverlay');
-  function renderFsOverlay() {
-    const show = FS_SUPPORTED && !overlayDismissed &&
-      (fsState === 'prompt' || (fsState === 'none' && !ui.fsDismissed));
-    fsOverlay.classList.toggle('open', show);
-    if (!show) return;
-    const acts = document.getElementById('fsOvActions');
-    acts.innerHTML = '';
-    const mk = (label, fn, cls) => {
-      const b = document.createElement('button');
-      b.textContent = label;
-      if (cls) b.className = cls;
-      b.onclick = fn;
-      acts.appendChild(b);
-    };
-    if (fsState === 'prompt') {
-      document.getElementById('fsOvTitle').textContent = '恢复数据文件连接';
-      document.getElementById('fsOvDesc').textContent =
-        '浏览器重启后需要重新确认一次文件权限，点一下就能继续同步到「' +
-        (fileHandle ? fileHandle.name : '数据文件') + '」。';
-      mk('恢复连接', reconnect, 'primary');
-      mk('暂不，这次先用本机数据', () => { overlayDismissed = true; renderFsOverlay(); }, 'fs-later');
-    } else {
-      document.getElementById('fsOvTitle').textContent = '把数据统一到一个文件';
-      document.getElementById('fsOvDesc').textContent =
-        '这个浏览器还没连接数据文件。连接后，Edge 和 Chrome 共用同一份数据；连接时会自动合并，两边的任务都不会丢。';
-      mk('打开已有数据文件…', pickExistingFile, 'primary');
-      mk('新建数据文件…', pickNewFile);
-      mk('暂不，以后从右上角「数据文件」设置', () => {
-        overlayDismissed = true;
-        ui.fsDismissed = 1;
-        saveUi();
-        renderFsOverlay();
-      }, 'fs-later');
-    }
-  }
 
   /* ------- now line ------- */
   function renderNow() {
@@ -3035,10 +2722,8 @@
   pickOverlay.addEventListener('click', e => { if (e.target === pickOverlay) closePick(); });
   document.getElementById('timeAddBtn').onclick = openTaskPicker;
 
-  booted = true;   // 同步层已声明就绪，之后的 save() 可正常写文件/云
+  booted = true;   // 云同步层已声明就绪，之后的 save() 可正常上传
   renderAll();
-  renderFsChip();
-  initFileStorage();
   initCloud();
 })();
 </script>
