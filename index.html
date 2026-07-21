@@ -420,6 +420,25 @@
     border-top: 1px dashed var(--line-soft);
   }
   #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; }
+  /* 双指调时段时浮在时间轴上方的当前范围提示 */
+  #rangeToast {
+    position: absolute;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(57, 50, 33, .8);
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 5px 13px;
+    border-radius: 999px;
+    z-index: 30;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .18s;
+    white-space: nowrap;
+  }
+  #rangeToast.show { opacity: 1; }
   #nowLine {
     position: absolute;
     left: 40px; right: 0;
@@ -908,7 +927,7 @@
     }
     header h1 { display: none; }      /* 375px 放不下，标题让位给日期和同步状态 */
     #cloudChip { max-width: 116px; }
-    .range-ctl { display: none; }          /* 显示时段在电脑上调，设置会同步过来 */
+    .range-ctl { display: none; }          /* 顶栏放不下下拉：手机上双指在时间轴上拖/捏来调时段 */
     .spacer { display: none; }
     #dateLabel {
       min-width: 0;
@@ -1151,9 +1170,10 @@
       <div id="remGhost"></div>
       <div id="editLayer"></div>
       <div id="nowLine"></div>
+      <div id="rangeToast"></div>
       <div id="emptyHint">
         <span class="only-desktop">在空白处按住往下拖，画出一段时间；也可以从左边拖任务过来</span>
-        <span class="only-mobile-inline">按住空白往下拖画出一段时间；<br>或点上方「＋」把清单里的任务排进来</span>
+        <span class="only-mobile-inline">按住空白往下拖画出一段时间；<br>或点上方「＋」把清单里的任务排进来；<br>双指上下拖 / 捏合可调显示时段</span>
       </div>
     </div>
   </div>
@@ -1828,8 +1848,10 @@
     const up = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
+      touchDragCancels.delete(up);
       save(); renderAll();
     };
+    touchDragCancels.add(up);   // 双指手势打断 = 直接收尾（时长改动已实时生效）
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
   }
@@ -1841,6 +1863,11 @@
       clientX: ev.clientX, clientY: ev.clientY, bubbles: true
     }));
   });
+
+  /* 第二根手指落下（双指调时段）时，要把已经开始的单指拖拽干净地掐掉，
+     不能让它照常“收尾”（否则会误建块/误放块）。各拖拽闭包把自己的取消函数登记在这。 */
+  const touchDragCancels = new Set();
+  function cancelTouchDrags() { for (const fn of [...touchDragCancels]) fn(); }
 
   /* ------- pointer-based drag & drop scheduling ------- */
   let justDragged = false;
@@ -1939,17 +1966,26 @@
         }
       }
     };
-    const up = ev => {
+    const stop = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
-      if (!dragging) return;
-      justDragged = true;
-      setTimeout(() => { justDragged = false; }, 0);
+      touchDragCancels.delete(cancel);
+    };
+    const cleanup = () => {
       document.body.classList.remove('is-dragging');
       if (pill) pill.remove();
       hideGhost();
       dropIndicator.remove();
       if (opts.sourceEl) opts.sourceEl.classList.remove('dragging');
+    };
+    const cancel = () => { stop(); if (dragging) cleanup(); };   // 双指手势打断：不落块
+    touchDragCancels.add(cancel);
+    const up = ev => {
+      stop();
+      if (!dragging) return;
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }, 0);
+      cleanup();
       if (overTimeline(ev.clientX, ev.clientY)) {
         t.scheduledDate = viewDate;
         t.startMin = yToSnappedMin(ev.clientY - offsetPx);
@@ -2033,14 +2069,20 @@
       ghost.style.top = minToPct(a) + '%';
       ghost.style.height = ((b - a) / daySpan() * 100) + '%';
     };
-    const up = ev => {
+    const stop = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
+      touchDragCancels.delete(cancel);
+    };
+    const up = ev => {
+      stop();
       if (!creating) return;
       hideGhost();
       const [a, b] = range(ev.clientY);
       openBlockEditor(a, b - a);
     };
+    const cancel = () => { stop(); hideGhost(); };   // 双指手势打断：不建块
+    touchDragCancels.add(cancel);
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
   });
@@ -2051,6 +2093,69 @@
     const start = yToSnappedMin(e.clientY);
     openBlockEditor(start, Math.min(60, dayEndMin() - start));
   });
+
+  /* ------- 手机：双指调整显示时段 ------- */
+  // 电脑上时段用顶栏下拉调，手机顶栏放不下，就直接在时间轴上调：
+  // 双指一起上下拖 = 平移时段，捏合/张开 = 缩放范围。结果照样写回
+  // settings.dayStart/dayEnd（落到整点），所以会正常云同步到电脑。
+  const rangeToast = document.getElementById('rangeToast');
+  let pinch = null;
+  let rangeToastTimer = 0;
+  // 两指的竖向间距；给个下限，免得两指几乎水平时缩放比例爆掉
+  const touchGap = e => Math.max(48, Math.abs(e.touches[0].clientY - e.touches[1].clientY));
+  const touchMid = e => (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  const showRangeToast = () => {
+    clearTimeout(rangeToastTimer);
+    rangeToast.textContent = `显示 ${state.settings.dayStart}:00 – ${state.settings.dayEnd}:00`;
+    rangeToast.classList.add('show');
+  };
+
+  timeline.addEventListener('touchstart', e => {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    cancelTouchDrags();       // 第一根手指可能已经在画块/拖块了，掐掉
+    closeMenu();
+    hideGhost();
+    pinch = {
+      rect: timeline.getBoundingClientRect(),
+      startMin: dayStartMin(), span: daySpan(),
+      mid: touchMid(e), gap: touchGap(e),
+    };
+    showRangeToast();
+  }, { passive: false });
+
+  timeline.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const h = pinch.rect.height || 1;
+    // 缩放：两指张开 → 显示的时段变短（看得更细）
+    const span = pinch.span * pinch.gap / touchGap(e);
+    // 平移 + 锚定：手势开始时两指中点对着的时刻，要一直跟着中点走
+    const anchor = pinch.startMin + (pinch.mid - pinch.rect.top) / h * pinch.span;
+    const start = anchor - (touchMid(e) - pinch.rect.top) / h * span;
+    // 落到整点，并守住下拉框的取值范围（开始 0–12 点、结束 12–24 点、至少跨 2 小时）
+    const spanH = Math.max(2, Math.min(24, Math.round(span / 60)));
+    let sh = Math.max(0, Math.min(12, Math.round(start / 60)));
+    let eh = Math.max(12, Math.min(24, sh + spanH));
+    if (eh - sh < 2) sh = Math.max(0, eh - 2);
+    if (sh !== state.settings.dayStart || eh !== state.settings.dayEnd) {
+      state.settings.dayStart = sh;
+      state.settings.dayEnd = eh;
+      selStart.value = sh;
+      selEnd.value = eh;
+      renderHours(); renderBlocks(); renderReminders(); renderNow();
+    }
+    showRangeToast();
+  }, { passive: false });
+
+  const endPinch = e => {
+    if (!pinch || e.touches.length >= 2) return;
+    pinch = null;
+    save();                   // 手势结束才落盘 + 触发云同步，中途只改内存
+    rangeToastTimer = setTimeout(() => rangeToast.classList.remove('show'), 700);
+  };
+  timeline.addEventListener('touchend', endPinch);
+  timeline.addEventListener('touchcancel', endPinch);
 
   /* ------- block menu ------- */
   const menu = document.getElementById('blockMenu');
