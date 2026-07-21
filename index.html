@@ -326,6 +326,36 @@
   }
   .future-bar:hover { color: var(--ink); background: var(--card); }
 
+  /* ---------- 子任务：任务肚子里的一张 checklist，只有文字和打勾 ----------
+     刻意保持薄：不排时间、不单独顺延、不进时间轴，全勾完也不自动完成父任务 */
+  .sub-tag { cursor: pointer; color: var(--ink-soft); background: var(--bg); border: 1px solid var(--line-soft); }
+  .sub-tag:hover { border-color: var(--ink-faint); color: var(--ink); }
+  .sub-tag.all-done { color: var(--accent-deep); background: var(--accent-soft); border-color: var(--block-border); }
+  .subs {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: -2px 4px 2px 22px;
+    padding-left: 8px;
+    border-left: 2px solid var(--line-soft);
+  }
+  .sub-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 7px; font-size: 0.88rem; }
+  .sub-row:hover { background: var(--card); }
+  .sub-row .check { width: 15px; height: 15px; font-size: 9px; border-radius: 5px; }
+  .sub-row .s-text { flex: 1; word-break: break-all; line-height: 1.4; }
+  .sub-row.done .s-text { text-decoration: line-through; color: var(--done); }
+  .sub-row:hover .icon-btn { opacity: 1; }
+  .sub-add input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.85rem;
+    color: var(--ink);
+    padding: 3px 6px;
+    width: 100%;
+  }
+  .sub-add input::placeholder { color: var(--ink-faint); }
+
   #doneSection { border-top: 1px solid var(--line); }
   #doneHeader { cursor: pointer; user-select: none; transition: color .15s; }
   #doneHeader:hover { color: var(--ink); }
@@ -1094,7 +1124,7 @@
         <button id="addBtn" title="添加">+</button>
       </div>
       <div id="todoList"></div>
-      <div class="hint">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点。</div>
+      <div class="hint">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点；点 ☑ 把任务拆成几小步。</div>
     </section>
 
     <section id="doneSection">
@@ -1480,7 +1510,11 @@
     const today = todayStr();
     const current = pending.filter(t => !(t.scheduledDate && t.scheduledDate > today));
     const future = pending.filter(t => t.scheduledDate && t.scheduledDate > today);
-    for (const t of current) list.appendChild(todoRow(t, list));
+    const append = t => {
+      list.appendChild(todoRow(t, list));
+      if (expandedSubs.has(t.id)) list.appendChild(subPanel(t));
+    };
+    for (const t of current) append(t);
     if (future.length) {
       const bar = document.createElement('div');
       bar.className = 'future-bar';
@@ -1488,8 +1522,84 @@
       bar.title = showFuture ? '收起' : '展开看看（它们到了那天会自动出现）';
       bar.onclick = () => { showFuture = !showFuture; renderTodos(); };
       list.appendChild(bar);
-      if (showFuture) for (const t of future) list.appendChild(todoRow(t, list));
+      if (showFuture) for (const t of future) append(t);
     }
+  }
+
+  /* ---------------- 子任务：只有文字和打勾的一张 checklist ----------------
+     不排时间、不进时间轴、不单独顺延——对日程系统隐形，只是父任务肚子里的备忘 */
+  const expandedSubs = new Set();   // 展开了子任务面板的任务 id（不持久化）
+
+  function focusSubInput(id) {
+    const inp = document.querySelector(`.subs[data-id="${id}"] .sub-add input`);
+    if (inp) inp.focus();
+  }
+  function subPanel(t) {
+    const wrap = document.createElement('div');
+    wrap.className = 'subs';
+    wrap.dataset.id = t.id;
+    for (const s of (t.subs || [])) {
+      const row = document.createElement('div');
+      row.className = 'sub-row' + (s.done ? ' done' : '');
+      const chk = document.createElement('div');
+      chk.className = 'check' + (s.done ? ' on' : '');
+      chk.textContent = '✓';
+      chk.title = s.done ? '标记未完成' : '标记完成';
+      chk.onclick = () => { s.done = !s.done; save(); renderTodos(); };
+      const span = document.createElement('span');
+      span.className = 's-text';
+      span.textContent = s.text;
+      span.title = '双击改内容';
+      span.addEventListener('dblclick', e => { e.stopPropagation(); editSub(s, span); });
+      const del = iconBtn('✕', '删除', () => {
+        t.subs = (t.subs || []).filter(x => x.id !== s.id);
+        if (!t.subs.length) delete t.subs;   // 删光了就把字段清掉，数据保持干净
+        save(); renderTodos();
+      });
+      row.append(chk, span, del);
+      wrap.appendChild(row);
+    }
+    const addRow = document.createElement('div');
+    addRow.className = 'sub-add';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = '＋ 下一步是什么？回车添加';
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const v = inp.value.trim();
+        if (!v) return;
+        (t.subs = t.subs || []).push({ id: uid(), text: v, done: false });
+        save(); renderTodos();
+        focusSubInput(t.id);   // 重画后把光标放回来，方便连着输入好几步
+      } else if (e.key === 'Escape') inp.blur();
+    });
+    addRow.appendChild(inp);
+    wrap.appendChild(addRow);
+    return wrap;
+  }
+  function editSub(s, span) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = s.text;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const commit = () => {
+      if (finished) return;
+      finished = true;
+      const v = input.value.trim();
+      if (v) { s.text = v; save(); }
+      renderTodos();
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') { finished = true; renderTodos(); }
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('pointerdown', e => e.stopPropagation());
+    input.addEventListener('dblclick', e => e.stopPropagation());
   }
 
   function todoRow(t, list) {
@@ -1497,7 +1607,7 @@
     el.className = 'todo';
     el.dataset.id = t.id;
     el.addEventListener('pointerdown', e => {
-      if (e.target.closest('.icon-btn, .check, .rename-input')) return;
+      if (e.target.closest('.icon-btn, .check, .rename-input, .sub-tag')) return;
       beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.todo' });
     });
 
@@ -1507,6 +1617,20 @@
     title.textContent = t.title;
     renameTitleSpan(t, title);
     el.append(chk, title);
+    if (t.subs && t.subs.length) {
+      const doneN = t.subs.filter(s => s.done).length;
+      const b = document.createElement('span');
+      b.className = 'tag sub-tag' + (doneN === t.subs.length ? ' all-done' : '');
+      b.textContent = `${doneN}/${t.subs.length}`;
+      b.title = expandedSubs.has(t.id) ? '收起子任务' : '展开子任务';
+      b.onclick = e => {
+        e.stopPropagation();
+        if (expandedSubs.has(t.id)) expandedSubs.delete(t.id);
+        else expandedSubs.add(t.id);
+        renderTodos();
+      };
+      el.appendChild(b);
+    }
     if (t.carried) {
       const tag = document.createElement('span');
       tag.className = 'tag'; tag.textContent = '顺延'; tag.title = '之前没做完，顺延过来的';
@@ -1523,10 +1647,15 @@
     // 手机上没法把任务拖到时间轴（不在同一个标签页），用弹层选时间代替
     const sched = iconBtn('◷', '排时间', () => openSchedPicker(t));
     sched.classList.add('only-mobile');
+    const subBtn = iconBtn('☑', '拆成几小步', () => {
+      expandedSubs.add(t.id);
+      renderTodos();
+      focusSubInput(t.id);
+    });
     const star = iconBtn('★', t.focus ? '取消焦点' : '设为焦点', () => toggleFocus(t.id));
     if (t.focus) star.classList.add('star-on');
     const del = iconBtn('✕', '删除', () => { if (confirm(`删除「${t.title}」？`)) removeTask(t.id); });
-    el.append(sched, star, del);
+    el.append(sched, subBtn, star, del);
     return el;
   }
 

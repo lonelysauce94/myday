@@ -26,6 +26,7 @@
 - 数据存 `localStorage`（key `myday.v1`），跨设备同步只走 GitHub 私有 Gist 云同步（`cloudChip`）；改 `state` 结构要考虑旧数据迁移（见 `migrate` / `rolloverTasks`）。
 - 「本地 data.json 数据文件」功能（File System Access API + `#fsChip` + 启动引导弹层）已于 2026-07 按用户要求整体移除，不要加回来；备份靠云同步菜单里的导出/导入。
 - 时间以"当天分钟数"表示（`startMin`/`durMin`），吸附粒度 `SNAP = 15` 分钟。
+- 子任务（`t.subs: [{id, text, done}]`，2026-07 加入）**刻意保持薄**：只有文字和打勾，一层、不排时间、不进时间轴、不单独顺延，全勾完也不自动完成父任务。用户明确要求防止过度复杂化，别给它加层级/时间/优先级等能力。
 - 手机版是同一页面的响应式变体：`@media (max-width: 760px)` + 底部 `#tabBar` 分页（清单 / 时间轴 / 随手记），三栏只显示其一。
   - 手机上任务**不能**拖到时间轴（不在同一屏），排时间靠 `◷` 按钮 → `#schedOverlay` 弹层；时间轴一侧靠 `#timeAddBar` 的「＋」→ `#pickOverlay` 选任务。
   - 桌面/手机差异用 `.only-mobile` / `.only-mobile-inline` / `.only-desktop` 控制。
