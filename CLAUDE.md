@@ -15,8 +15,8 @@
 - `index.html` — 全部应用代码（HTML + CSS + JS 都在这一个文件里，约 3000 行）。
 - `sw.js` — Service Worker：离线缓存，页面导航网络优先。
 - `manifest.json`、`icons/` — PWA 安装所需。
-- `index.backup-*.html` — 历史备份，不要动。
 - `部署到iPhone.md` — 用户的部署与云同步说明。
+- 不要往仓库里放备份文件——git 历史就是备份，而且仓库里的一切都会被 Pages 公开发布。
 
 ## 代码约定
 
