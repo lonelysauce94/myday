@@ -903,6 +903,22 @@
   /* ---------- 手机版：单列 + 底部标签页 ---------- */
   #tabBar { display: none; }
   .only-mobile { display: none; }
+  .only-mobile-inline { display: none; }
+  #timeAddBar { display: none; }
+  #timeAddBtn {
+    flex: 1;
+    border: 1px dashed var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    border-radius: 10px;
+    padding: 11px 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .12s, color .12s;
+  }
+  #timeAddBtn:active { background: var(--accent); color: #fff; }
 
   @media (max-width: 760px) {
     html, body { height: 100dvh; }
@@ -949,6 +965,10 @@
     .todo { touch-action: pan-y; }
 
     .only-mobile { display: inline-flex; }
+    .only-mobile-inline { display: inline; }
+    .only-desktop { display: none; }
+    /* 时间轴顶部：手机上没法拖任务，给一个「排入清单任务」的入口 */
+    #timeAddBar { display: flex; margin: 0 0 10px; flex: none; }
 
     /* 触摸目标放大一点 */
     .todo { padding-top: 8px; padding-bottom: 8px; }
@@ -996,6 +1016,7 @@
 
   /* ---------- 排时间弹层（手机上代替「拖到时间轴」） ---------- */
   #cloudOverlay,
+  #pickOverlay,
   #schedOverlay {
     position: fixed;
     inset: 0;
@@ -1006,7 +1027,25 @@
     z-index: 60;
     padding: 16px;
   }
-  #schedOverlay.open, #cloudOverlay.open { display: flex; }
+  #schedOverlay.open, #cloudOverlay.open, #pickOverlay.open { display: flex; }
+  /* 从时间轴一侧挑一件现有任务排进来的列表 */
+  .pick-list { max-height: 46vh; overflow-y: auto; margin: 6px -8px 2px; }
+  .pick-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pick-item:hover { background: var(--panel); }
+  .pick-item:active { background: var(--accent-soft); }
+  .pick-item .pick-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick-item .pick-when { font-size: .74rem; color: var(--ink-soft); flex: none; font-variant-numeric: tabular-nums; }
+  .pick-item .pick-go { color: var(--accent); font-size: 1.05rem; flex: none; }
+  .pick-empty { color: var(--ink-soft); font-size: .85rem; text-align: center; padding: 22px 8px; line-height: 1.8; }
   .sched-card {
     background: var(--card);
     border-radius: 16px;
@@ -1124,6 +1163,9 @@
   <div class="v-split" id="splitLeft" title="拖动调整宽度"></div>
 
   <div id="right">
+    <div id="timeAddBar">
+      <button id="timeAddBtn" type="button">＋ 把清单里的任务排进来</button>
+    </div>
     <div id="remBar"></div>
     <div id="timeline">
       <div id="hourRows"></div>
@@ -1134,7 +1176,10 @@
       <div id="remGhost"></div>
       <div id="editLayer"></div>
       <div id="nowLine"></div>
-      <div id="emptyHint">在空白处按住往下拖，画出一段时间；也可以从左边拖任务过来</div>
+      <div id="emptyHint">
+        <span class="only-desktop">在空白处按住往下拖，画出一段时间；也可以从左边拖任务过来</span>
+        <span class="only-mobile-inline">按住空白往下拖画出一段时间；<br>或点上方「＋」把清单里的任务排进来</span>
+      </div>
     </div>
   </div>
 
@@ -1179,6 +1224,17 @@
     <div class="sched-actions">
       <button id="cloudCancel">关闭</button>
       <button id="cloudConnect" class="primary">连接</button>
+    </div>
+  </div>
+</div>
+
+<div id="pickOverlay">
+  <div class="sched-card">
+    <h3>排入一件任务</h3>
+    <div class="sub" id="pickSub"></div>
+    <div id="pickList" class="pick-list"></div>
+    <div class="sched-actions">
+      <button id="pickCancel">关闭</button>
     </div>
   </div>
 </div>
@@ -1448,7 +1504,14 @@
       renameTitleSpan(t, span);
       const un = iconBtn('★', '取消焦点', () => toggleFocus(t.id));
       un.classList.add('star-on');
-      el.append(chk, span, un);
+      el.append(chk, span);
+      // 手机上焦点任务也能直接排到时间轴（跟清单里的任务一致）
+      if (!t.done) {
+        const sched = iconBtn('◷', '排时间', () => openSchedPicker(t));
+        sched.classList.add('only-mobile');
+        el.append(sched);
+      }
+      el.append(un);
       list.appendChild(el);
     });
   }
@@ -2922,6 +2985,55 @@
     if (t) { t.scheduledDate = null; t.startMin = null; save(); renderAll(); }
     closeSched();
   };
+
+  /* ------- 从时间轴一侧把清单里的现有任务排进来（手机专用入口） ------- */
+  const pickOverlay = document.getElementById('pickOverlay');
+  function openTaskPicker() {
+    const listEl = document.getElementById('pickList');
+    listEl.innerHTML = '';
+    // 还没做完、且今天还没排上时间轴的任务，都能排进来
+    const pending = state.tasks
+      .filter(t => !t.done && !(t.scheduledDate === viewDate && t.startMin != null))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    document.getElementById('pickSub').textContent =
+      pending.length ? `选一件排到 ${viewDate}` : '';
+    if (!pending.length) {
+      listEl.innerHTML = '<div class="pick-empty">清单里的任务都排进今天了。<br>先到「清单」记下新的事，再回来排时间。</div>';
+    } else {
+      for (const t of pending) {
+        const row = document.createElement('div');
+        row.className = 'pick-item';
+        const title = document.createElement('span');
+        title.className = 'pick-title';
+        title.textContent = t.title;
+        row.appendChild(title);
+        if (t.focus) {
+          const f = document.createElement('span');
+          f.className = 'pick-when';
+          f.textContent = '★ 焦点';
+          row.appendChild(f);
+        }
+        if (t.scheduledDate && t.startMin != null) {
+          const w = document.createElement('span');
+          w.className = 'pick-when';
+          w.textContent = (t.scheduledDate === todayStr() ? '今天 ' :
+                           t.scheduledDate.slice(5).replace('-', '/') + ' ') + fmtTime(t.startMin);
+          row.appendChild(w);
+        }
+        const go = document.createElement('span');
+        go.className = 'pick-go';
+        go.textContent = '◷';
+        row.appendChild(go);
+        row.onclick = () => { closePick(); openSchedPicker(t); };
+        listEl.appendChild(row);
+      }
+    }
+    pickOverlay.classList.add('open');
+  }
+  function closePick() { pickOverlay.classList.remove('open'); }
+  document.getElementById('pickCancel').onclick = closePick;
+  pickOverlay.addEventListener('click', e => { if (e.target === pickOverlay) closePick(); });
+  document.getElementById('timeAddBtn').onclick = openTaskPicker;
 
   booted = true;   // 同步层已声明就绪，之后的 save() 可正常写文件/云
   renderAll();
