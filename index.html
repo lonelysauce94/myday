@@ -462,7 +462,7 @@
     border: 1px solid var(--block-border);
     border-left: 4px solid var(--accent);
     border-radius: 8px;
-    padding: 3px 9px;
+    padding: 0 9px;   /* 内容垂直居中，竖向留白靠居中本身；不占薄块的高度 */
     font-size: 0.85rem;
     overflow: hidden;
     cursor: grab;
@@ -520,6 +520,17 @@
   }
   .block.selected { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); z-index: 4; }
   .block .b-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 块按自己的实际高度自适应内容：太矮时别让标题被裁掉（时段缩放后短任务就这么高）。
+     注意容器查询量的是 content-box，即块高再扣掉上下 padding 和边框（约 8px）。 */
+  .block { container-type: size; }
+  @container (max-height: 30px) {
+    /* 两行放不下：收起时间行，位置留给标题——块在轴上的位置本身就说明了时间 */
+    .block .b-time { display: none; }
+  }
+  @container (max-height: 16px) {
+    /* 一刻钟这种薄片：标题字号也收一点，尽量露全 */
+    .block .b-title { font-size: 0.72rem; line-height: 1.1; }
+  }
   .block .b-time {
     font-size: 0.68rem;
     color: var(--ink-soft);
