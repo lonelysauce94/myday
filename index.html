@@ -611,6 +611,17 @@
     transition: color .15s, background .15s;
   }
   #remAdd:hover { color: var(--focus-deep); background: var(--focus-soft); }
+  #remNotifBtn {
+    border: 1px dashed var(--focus-line);
+    background: none;
+    color: var(--focus-deep);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 3px 11px;
+    border-radius: 999px;
+    transition: color .15s, background .15s;
+  }
+  #remNotifBtn:hover { background: var(--focus-soft); }
   #remMarkers {
     position: absolute;
     left: 52px; right: 4px;
@@ -2332,6 +2343,7 @@
     }
     (state.reminders[viewDate] = state.reminders[viewDate] || []).push({ id: uid(), text, time });
     save(); renderReminders();
+    if (time != null) askNotifPerm();
   }
   function removeReminder(id) {
     state.reminders[viewDate] = dayReminders().filter(r => r.id !== id);
@@ -2362,7 +2374,9 @@
         if (t == null) { alert('时间格式看不懂，试试写成 18:00 这样。'); return; }
         r.time = t;
       }
+      renotify(r.id);
       save(); renderReminders();
+      if (r.time != null) askNotifPerm();
     });
     mk('删除', () => removeReminder(r.id), 'm-danger');
     const rect = anchorEl.getBoundingClientRect();
@@ -2431,7 +2445,9 @@
       if (overTimeline(ev.clientX, ev.clientY)) r.time = yToSnappedMin(ev.clientY);
       else if (overBarZone(ev.clientX, ev.clientY)) r.time = null;
       else return;
+      renotify(r.id);
       save(); renderReminders();
+      if (r.time != null) askNotifPerm();
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
@@ -2505,7 +2521,80 @@
     add.textContent = items.length ? '＋ 提醒' : '⚑ 添加提醒（生日、纪念日、要记得的事）';
     add.onclick = e => { e.stopPropagation(); addReminder(); };
     remBar.appendChild(add);
+    // 有定时提醒但还没授权过通知：给个一次性的开关按钮（授权必须由点按触发）
+    if (notifSupported() && Notification.permission === 'default' &&
+        items.some(r => r.time != null)) {
+      const nb = document.createElement('button');
+      nb.id = 'remNotifBtn';
+      nb.textContent = '🔔 到点弹通知';
+      nb.title = '到点时弹系统通知；App 关着的时候响不了';
+      nb.onclick = e => { e.stopPropagation(); askNotifPerm(); };
+      remBar.appendChild(nb);
+    }
   }
+
+  /* ------- 提醒到点弹通知 ------- */
+  // 能做到的边界先说清楚：网页 App 在 iPhone 上锁屏/切走后 JS 会被冻结，到点不会响；
+  // 真正的锁屏推送需要一台服务器往外推，这里没有。所以策略是——
+  // App 开着（前台，或电脑上挂在后台标签）时到点就响；被冻结错过的，回到 App 那一刻补报。
+  const NOTIFIED_KEY = 'myday.notified';   // 只存本机：每台设备各自响各自的，不跟云同步搅在一起
+  let notified = {};
+  try { notified = JSON.parse(localStorage.getItem(NOTIFIED_KEY)) || {}; } catch { notified = {}; }
+  function markNotified(id) {
+    if (notified.date !== todayStr()) notified = { date: todayStr(), ids: [] };
+    notified.ids.push(id);
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+  }
+  const wasNotified = id => notified.date === todayStr() && notified.ids.includes(id);
+  // 改过时间的提醒当作新的一条，重新有机会响
+  function renotify(id) {
+    if (notified.date !== todayStr()) return;
+    notified.ids = notified.ids.filter(x => x !== id);
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+  }
+
+  // iOS 上只有「添加到主屏幕」的 PWA 里才有 Notification，普通 Safari 标签页没有
+  function notifSupported() { return 'Notification' in window; }
+  function askNotifPerm() {
+    if (notifSupported() && Notification.permission === 'default')
+      Notification.requestPermission().then(renderReminders);
+  }
+
+  function fireNotification(r, lateMin) {
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    if (!notifSupported() || Notification.permission !== 'granted') return;
+    const title = '⚑ ' + r.text;
+    const opts = {
+      body: lateMin > 1 ? `${fmtTime(r.time)} 的提醒，刚错过 ${lateMin} 分钟` : '现在 ' + fmtTime(r.time),
+      tag: 'rem-' + r.id,             // 同一条不重复弹
+      icon: 'icons/icon-192.png'
+    };
+    // iOS 只认 Service Worker 发的通知；拿不到 SW（比如本地直接开文件）就退回普通通知
+    const fallback = () => { try { new Notification(title, opts); } catch { /* 不支持就算了 */ } };
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistration()
+        .then(reg => { if (!reg) throw new Error(); return reg.showNotification(title, opts); })
+        .catch(fallback);
+    } else fallback();
+  }
+
+  function checkReminders() {
+    const list = state.reminders[todayStr()] || [];   // 只看真·今天，跟正在翻看哪天无关
+    if (!list.length) return;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    for (const r of list) {
+      if (r.time == null || r.time > nowMin || wasNotified(r.id)) continue;
+      markNotified(r.id);
+      const late = nowMin - r.time;
+      if (late <= 45) fireNotification(r, late);
+      // 错过太久的就不吵了，提醒栏里本来就看得见
+    }
+  }
+  setInterval(checkReminders, 30 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
+  window.addEventListener('focus', checkReminders);
+  checkReminders();
 
   /* ------- notes ------- */
   const notesArea = document.getElementById('notesArea');

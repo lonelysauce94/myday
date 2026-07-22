@@ -1,7 +1,7 @@
 /* 一日一页 —— Service Worker
    目标：断网也能打开 App；有网时优先拿新版页面。
    改动页面后把 VERSION 加 1，用户下次打开就会更新。 */
-const VERSION = 'myday-v9';
+const VERSION = 'myday-v10';
 const SHELL = [
   './',
   './index.html',
@@ -25,6 +25,17 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// 点提醒通知 → 回到 App（已开着就聚焦，没开就打开）
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+      for (const w of ws) if ('focus' in w) return w.focus();
+      return clients.openWindow('./');
+    })
   );
 });
 
