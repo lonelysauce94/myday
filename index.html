@@ -1375,8 +1375,8 @@
   /* ---------------- day range selects ---------------- */
   const selStart = document.getElementById('dayStart');
   const selEnd = document.getElementById('dayEnd');
-  for (let h = 0; h <= 12; h++) selStart.add(new Option(`${h}:00`, h));
-  for (let h = 12; h <= 24; h++) selEnd.add(new Option(`${h}:00`, h));
+  for (let h = 0; h <= 23; h++) selStart.add(new Option(`${h}:00`, h));
+  for (let h = 1; h <= 24; h++) selEnd.add(new Option(`${h}:00`, h));
   selStart.value = state.settings.dayStart;
   selEnd.value = state.settings.dayEnd;
   selStart.onchange = () => {
@@ -1802,6 +1802,21 @@
         `<span class="b-time">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}</span>`;
 
       el.addEventListener('pointerdown', e => {
+        // 触屏：单指按住块滑动照样是平移时段，挪块要「双击，第二下按住拖」
+        // ——不然滚动时手指扫过块上全是误挪（和空白处画块同一套约定）。
+        if (e.pointerType && e.pointerType !== 'mouse') {
+          const now = performance.now();
+          const isDouble = lastBlockTap.id === t.id &&
+            now - lastBlockTap.t < 350 && Math.abs(e.clientY - lastBlockTap.y) < 44;
+          if (!isDouble) {
+            lastBlockTap = { id: t.id, t: now, y: e.clientY };
+            e.preventDefault();
+            beginTimelinePan(e);
+            return;
+          }
+          lastBlockTap = { id: null, t: 0, y: 0 };
+          blockDblAt = now;   // 压掉浏览器补发的 dblclick（那是改名入口）
+        }
         const r = el.getBoundingClientRect();
         beginDrag(e, t, { offsetPx: e.clientY - r.top, sourceEl: el });
       });
@@ -1812,13 +1827,18 @@
       });
       el.addEventListener('dblclick', e => {
         e.stopPropagation();
+        if (performance.now() - blockDblAt < 600) return;   // 触屏双击是拖块手势，不弹改名
         renameByPrompt(t.id);
       });
 
       const handle = document.createElement('div');
       handle.className = 'resize-handle';
       handle.draggable = false;
-      handle.addEventListener('pointerdown', e => startResize(e, t));
+      handle.addEventListener('pointerdown', e => {
+        // 触屏：没先点选中这个块时，摸到底边当平移，免得滑动时误改时长
+        if (e.pointerType && e.pointerType !== 'mouse' && selectedBlockId !== t.id) return;
+        startResize(e, t);
+      });
       el.appendChild(handle);
       blocksArea.appendChild(el);
     }
@@ -2059,6 +2079,9 @@
   // 想滑动看别的时段时全是误触。这里记双击的第一击。
   let lastEmptyTap = { t: 0, y: 0 };
   let touchDblAt = 0;   // 触屏双击我们自己处理过后，压掉浏览器可能补发的 dblclick
+  // 块上的「双击再拖」跟空白处同一套约定，各记各的第一击
+  let lastBlockTap = { id: null, t: 0, y: 0 };
+  let blockDblAt = 0;
 
   timeline.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
@@ -2145,6 +2168,7 @@
       if (!moved && Math.abs(ev.clientY - startY) < 6) return;
       moved = true;
       lastEmptyTap = { t: 0, y: 0 };   // 划动过就不算「双击的第一击」
+      lastBlockTap = { id: null, t: 0, y: 0 };
       // 内容跟着手指走：往下拖 → 露出更早的时段
       applyRange(base - (ev.clientY - startY) / (rect.height || 1) * span, span);
       showRangeToast();
@@ -2177,14 +2201,12 @@
     rangeToast.classList.add('show');
   };
 
-  // 把（分钟为单位的）起点和跨度落到整点、守住下拉框的取值范围
-  // （开始 0–12 点、结束 12–24 点、至少跨 2 小时），再写回设置并重画。
-  // 单指平移和双指捏合都走这里。
+  // 把（分钟为单位的）起点和跨度落到整点、守住合理范围（至少跨 2 小时，
+  // 0:00–24:00 之间随便放——以前限定必须横跨中午，放大后就滑不到清晨和深夜了），
+  // 再写回设置并重画。单指平移和双指捏合都走这里。
   function applyRange(startFloatMin, spanFloatMin) {
     const spanH = Math.max(2, Math.min(24, Math.round(spanFloatMin / 60)));
-    const lo = Math.max(0, 12 - spanH);
-    const hi = Math.min(12, 24 - spanH);
-    const sh = Math.max(lo, Math.min(hi, Math.round(startFloatMin / 60)));
+    const sh = Math.max(0, Math.min(24 - spanH, Math.round(startFloatMin / 60)));
     const eh = sh + spanH;
     if (sh === state.settings.dayStart && eh === state.settings.dayEnd) return;
     state.settings.dayStart = sh;
