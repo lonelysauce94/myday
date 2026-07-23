@@ -396,6 +396,14 @@
     min-height: 0;
     border-radius: var(--radius);
   }
+  /* 时间轴整面都是操作区：双击画块/拖块时别把小时标签、提示文字选中（很烦）。
+     只有就地改名的输入框例外，里面的字照常能选。 */
+  #timeline, #timeAddBar, #remBar {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #timeline input, #remBar input { user-select: text; -webkit-user-select: text; }
   .hour-row {
     position: absolute;
     left: 0; right: 0;
@@ -922,6 +930,13 @@
   }
   body.is-dragging { cursor: grabbing; }
   body.is-dragging * { cursor: grabbing !important; }
+  /* 拖拽进行中，页面上任何文字都不该被顺手选中 */
+  body.is-dragging, body.is-dragging * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+  /* iOS 上长按可拖的东西别弹出文字选择/放大镜 */
+  .todo, .focus-item, .block, .rem-pill, .rem-flag { -webkit-touch-callout: none; }
   /* 拖拽进行中禁掉浏览器自身的滚动/缩放手势，否则触摸拖到一半会被打断 */
   body.is-dragging { touch-action: none; }
 
@@ -2023,6 +2038,8 @@
         dragging = true;
         dragDur = t.durMin || 60;
         closeMenu();
+        // 双击进入拖拽时，第一击可能已经把标题选中了一个词，放掉它
+        window.getSelection()?.removeAllRanges();
         document.body.classList.add('is-dragging');
         if (opts.sourceEl) opts.sourceEl.classList.add('dragging');
         pill = document.createElement('div');
@@ -2456,6 +2473,7 @@
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
         dragging = true;
         remMenu.classList.remove('open');
+        window.getSelection()?.removeAllRanges();
         document.body.classList.add('is-dragging');
         sourceEl.classList.add('dragging');
         pill = document.createElement('div');

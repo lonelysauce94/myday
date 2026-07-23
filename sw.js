@@ -1,7 +1,7 @@
 /* 一日一页 —— Service Worker
    目标：断网也能打开 App；有网时优先拿新版页面。
    改动页面后把 VERSION 加 1，用户下次打开就会更新。 */
-const VERSION = 'myday-v11';
+const VERSION = 'myday-v12';
 const SHELL = [
   './',
   './index.html',
