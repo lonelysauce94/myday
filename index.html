@@ -51,7 +51,14 @@
     flex-direction: column;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    /* 整个页面是操作界面不是文档：文字默认不可选中。iOS 上「双击再拖」
+       会触发系统的双击选词+按住扩选，选区从旁边任何可选文字起头就会
+       整片刷蓝，只挡住任务行自己不够。要选文字的地方（输入框、随手记）
+       在下面单独放开。 */
+    user-select: none;
+    -webkit-user-select: none;
   }
+  input, textarea { user-select: text; -webkit-user-select: text; }
   ::selection { background: var(--accent-soft); }
   button, select, input { font-family: inherit; }
 
