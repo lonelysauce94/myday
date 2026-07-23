@@ -419,7 +419,9 @@
     left: 48px; right: 0;
     border-top: 1px dashed var(--line-soft);
   }
-  #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; }
+  /* overflow:hidden——开始/结束时间在显示时段外的块裁掉超出部分，
+     不然手机上平移时段后，块会盖到时间轴上方的「排任务」按钮那里 */
+  #blocksArea { position: absolute; left: 52px; right: 4px; top: 0; bottom: 0; overflow: hidden; }
   /* 双指调时段时浮在时间轴上方的当前范围提示 */
   #rangeToast {
     position: absolute;
@@ -475,6 +477,10 @@
     transition: box-shadow .15s, border-color .15s;
   }
   .block:hover { box-shadow: var(--shadow-md); border-color: #b2c9ba; }
+  /* 开头/结尾被裁在显示时段外的块：标题贴到还看得见的那一端，别跟着藏进裁掉的部分 */
+  .block.clip-top { justify-content: flex-end; padding-bottom: 8px; }
+  .block.clip-bottom { justify-content: flex-start; padding-top: 8px; }
+  .block.clip-top.clip-bottom { justify-content: center; padding-top: 0; padding-bottom: 0; }
   .block:active { cursor: grabbing; }
   .block.done {
     background: repeating-linear-gradient(-45deg, #f3f2ec 0 5px, #edece5 5px 10px);
@@ -979,7 +985,7 @@
 
     /* 时间轴整块不滚动，直接把触摸手势交给我们自己处理 */
     #timeline { touch-action: none; --rail-w: 104px !important; }
-    /* 清单里允许竖向滚动，长按才进入拖拽（见 beginDrag） */
+    /* 清单里允许竖向滚动，排序要「双击，第二下按住拖」（见 attachListDrag） */
     .todo { touch-action: pan-y; }
 
     .only-mobile { display: inline-flex; }
@@ -1165,7 +1171,7 @@
         <button id="addBtn" title="添加">+</button>
       </div>
       <div id="todoList"></div>
-      <div class="hint">拖到时间轴安排时间，上下拖动调整顺序；双击任务名可改名；点 ★ 设为今日焦点；点 ☑ 把任务拆成几小步。</div>
+      <div class="hint"><span class="only-desktop">拖到时间轴安排时间，上下拖动调整顺序；</span><span class="only-mobile-inline">双击一条任务、第二下按住上下拖可排序；点 ◷ 安排时间；</span>双击任务名可改名；点 ★ 设为今日焦点；点 ☑ 把任务拆成几小步。</div>
     </section>
 
     <section id="doneSection">
@@ -1484,6 +1490,36 @@
     span.title = '双击改名';
   }
 
+  /* 手机上清单排序：手指按住直接拖会跟列表滚动打架，所以沿用时间轴挪块
+     那套约定——「双击，第二下按住拖」。touch-action 只在手指落下那一刻生效，
+     所以第一击抬起后把这一行短暂设成 none，第二击才不会被浏览器抢去滚动。
+     电脑上鼠标不受影响，照常按住就拖。 */
+  let listTap = { id: null, t: 0, y: 0 };
+  function attachListDrag(el, t, listEl, itemSel) {
+    const ctrl = '.icon-btn, .check, .rename-input, .sub-tag';
+    el.addEventListener('pointerdown', e => {
+      if (e.target.closest(ctrl)) return;
+      if (e.pointerType && e.pointerType !== 'mouse') {
+        const now = performance.now();
+        const isDouble = listTap.id === t.id &&
+          now - listTap.t < 350 && Math.abs(e.clientY - listTap.y) < 44;
+        if (!isDouble) return;   // 第一击：照常滚动/点按，抬起时在下面的 pointerup 里记账
+        listTap = { id: null, t: 0, y: 0 };
+        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl, itemSel, touchDbl: true });
+        return;
+      }
+      beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl, itemSel });
+    });
+    el.addEventListener('pointerup', e => {
+      if (!e.pointerType || e.pointerType === 'mouse') return;
+      if (e.target.closest(ctrl)) return;
+      // 能收到 pointerup 说明这一下是「点」不是「滚」（滚动只会发 pointercancel）
+      listTap = { id: t.id, t: performance.now(), y: e.clientY };
+      el.style.touchAction = 'none';
+      setTimeout(() => { el.style.touchAction = ''; }, 400);
+    });
+  }
+
   /* ---------------- left panel render ---------------- */
   function renderFocus() {
     const list = document.getElementById('focusList');
@@ -1501,10 +1537,7 @@
       el.className = 'focus-item' + (t.done ? ' done' : '');
       el.dataset.id = t.id;
       el.innerHTML = `<span class="focus-num">${i + 1}</span>`;
-      el.addEventListener('pointerdown', e => {
-        if (e.target.closest('.icon-btn, .check, .rename-input')) return;
-        beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.focus-item' });
-      });
+      attachListDrag(el, t, list, '.focus-item');
       const chk = makeCheck(t);
       const span = document.createElement('span');
       span.textContent = t.title;
@@ -1648,10 +1681,7 @@
     const el = document.createElement('div');
     el.className = 'todo';
     el.dataset.id = t.id;
-    el.addEventListener('pointerdown', e => {
-      if (e.target.closest('.icon-btn, .check, .rename-input, .sub-tag')) return;
-      beginDrag(e, t, { offsetPx: 0, sourceEl: el, listEl: list, itemSel: '.todo' });
-    });
+    attachListDrag(el, t, list, '.todo');
 
     const chk = makeCheck(t);
     const title = document.createElement('span');
@@ -1808,6 +1838,7 @@
       el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';
       el.style.left = (t._col * w) + '%';
       el.style.width = `calc(${w}% - 4px)`;
+      markClipped(el, t);
       el.dataset.id = t.id;
       el.innerHTML = `<span class="b-title">${escapeHtml(t.title)}</span>` +
         `<span class="b-time">${fmtTime(t.startMin)} – ${fmtTime(t.startMin + t.durMin)}</span>`;
@@ -1855,6 +1886,13 @@
     }
   }
 
+  // 块的开头/结尾在显示时段外（blocksArea overflow:hidden 会裁掉），
+  // 标记出来让标题贴到可见的那一端（见 .clip-top / .clip-bottom）
+  function markClipped(el, t) {
+    if (t.startMin < dayStartMin()) el.classList.add('clip-top');
+    if (t.startMin + t.durMin > dayEndMin()) el.classList.add('clip-bottom');
+  }
+
   // 只读的"未完成"痕迹方块：记录那天原本排了、但没做完的时段，纯展示，不可拖动/编辑
   function renderMissedBlock(t, totalCols) {
     const el = document.createElement('div');
@@ -1865,6 +1903,7 @@
     el.style.height = Math.max(t.durMin / daySpan() * 100, 1.8) + '%';
     el.style.left = (t._col * w) + '%';
     el.style.width = `calc(${w}% - 4px)`;
+    markClipped(el, t);
     el.title = `未完成 · 原定 ${fmtTime(t.startMin)}–${fmtTime(t.startMin + t.durMin)}，已顺延`;
     el.innerHTML =
       `<span class="b-title">${escapeHtml(t.title)}<span class="miss-tag">未完成</span></span>` +
@@ -1967,10 +2006,11 @@
 
   function beginDrag(e, t, opts) {
     if (e.button !== 0) return;
-    // 触摸时，清单里的条目不参与拖拽：手指在列表上滑动应该是滚动。
-    // （手机上排时间走任务条的「◷」弹层，时间轴里的块照常可拖）
-    if (e.pointerType && e.pointerType !== 'mouse' && opts.listEl) return;
-    e.preventDefault();
+    // 触摸时，清单里的条目不直接进入拖拽：手指在列表上滑动应该是滚动。
+    // 想排序走「双击，第二下按住拖」那条路（attachListDrag），带 touchDbl 标记进来。
+    if (e.pointerType && e.pointerType !== 'mouse' && opts.listEl && !opts.touchDbl) return;
+    // 触屏双击进来的不 preventDefault：手指不动的话浏览器还会补发 dblclick（双击任务名改名靠它）
+    if (!opts.touchDbl) e.preventDefault();
     const startX = e.clientX, startY = e.clientY;
     const offsetPx = opts.offsetPx || 0;
     let dragging = false;
