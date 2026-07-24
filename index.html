@@ -1326,11 +1326,16 @@
     } catch { return structuredClone(defaults); }
   }
   function save() {
+    // 启动阶段（顺延 / 数据迁移）也会调 save()，但那是程序自己整理，不是你的新改动。
+    // 要是给它盖上"刚刚"的时间戳，这份可能已经很旧的本地数据就会在云同步里冒充"最新"，
+    // 把别的设备刚写好的那份覆盖掉（2026-07 手机记录丢失就是这么来的）。
+    // 所以启动阶段只落本地，不动 savedAt 也不上传，谁新谁旧交给 cloudSync 按真正的最后改动时间判。
+    if (!booted) {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      return;
+    }
     state.savedAt = Date.now();
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    // 启动阶段（顺延/数据迁移）会调 save()，但文件/云同步层还没初始化，
-    // 此时只落本地，等启动时的 syncFromFile / cloudSync 把较新的本地数据推上去。
-    if (!booted) return;
     scheduleCloudWrite();
   }
 
@@ -2800,6 +2805,7 @@
      savedAt 新的一方说了算，首次连接时合并，两边任务都不丢。
      断网不报错，改动照常存本机，联网后自动补传。 */
   const CLOUD_KEY = 'myday.cloud';
+  const DIRTY_KEY = 'myday.dirty';   // 「本机有改动还没传上去」
   const GIST_FILE = 'myday-data.json';
   const GIST_DESC = '一日一页 · 数据（请勿删除）';
 
@@ -2807,7 +2813,13 @@
   try { cloud = Object.assign(cloud, JSON.parse(localStorage.getItem(CLOUD_KEY)) || {}); } catch {}
   let cloudState = 'none';      // none | syncing | on | offline | error
   let cloudPulling = false;
-  let cloudWriteTimer = null, cloudWriting = false, cloudQueued = false, cloudDirty = false;
+  let cloudWriteTimer = null, cloudWriting = false, cloudQueued = false;
+  // 这个标记要落 localStorage：iOS 上改完就切走、App 被系统杀掉，欠的这次上传下回打开还得认账
+  let cloudDirty = localStorage.getItem(DIRTY_KEY) === '1';
+  function setDirty(v) {
+    cloudDirty = v;
+    if (v) localStorage.setItem(DIRTY_KEY, '1'); else localStorage.removeItem(DIRTY_KEY);
+  }
 
   const cloudOn = () => !!(cloud.token && cloud.gistId);
   function saveCloudCfg() { localStorage.setItem(CLOUD_KEY, JSON.stringify(cloud)); }
@@ -2846,15 +2858,16 @@
     if (!cloudOn()) return;
     if (cloudWriting) { cloudQueued = true; return; }
     cloudWriting = true;
+    clearTimeout(cloudWriteTimer);                         // 现在就传，别让防抖再补一次一样的
     setCloudState('syncing');
     try {
       const files = {};
       files[GIST_FILE] = { content: JSON.stringify(state, null, 2) };
       await gh('/gists/' + cloud.gistId, { method: 'PATCH', body: JSON.stringify({ files }) });
-      cloudDirty = false;
+      setDirty(false);
       setCloudState('on');
     } catch (e) {
-      cloudDirty = true;                                   // 记着还欠一次上传
+      setDirty(true);                                      // 记着还欠一次上传
       setCloudState(isAuthErr(e) ? 'error' : 'offline');
       console.warn('云同步写入失败：', e);
     } finally {
@@ -2864,7 +2877,7 @@
   }
   function scheduleCloudWrite() {
     if (!cloudOn()) return;
-    cloudDirty = true;
+    setDirty(true);
     clearTimeout(cloudWriteTimer);
     cloudWriteTimer = setTimeout(cloudWriteNow, 1200);     // 网络请求，防抖比本地文件长一些
   }
@@ -2877,7 +2890,12 @@
       const s = await cloudRead();
       if (s === undefined) { setCloudState('error'); return; }
       if (s === null) { await cloudWriteNow(); return; }
-      if ((s.savedAt || 0) > (state.savedAt || 0)) { adoptState(s); setCloudState('on'); }
+      if ((s.savedAt || 0) > (state.savedAt || 0)) {
+        // 云端更新，正常直接采用；但本机若还欠一次上传（离线改的、或改完 App 就被杀了），
+        // 直接采用等于把本机那点改动无声抹掉——这时两份合并，谁的任务都不丢。
+        if (cloudDirty) { adoptState(mergeStates(state, s)); save(); await cloudWriteNow(); }
+        else { adoptState(s); setCloudState('on'); }
+      }
       else if ((state.savedAt || 0) > (s.savedAt || 0) || cloudDirty) await cloudWriteNow();
       else setCloudState('on');
     } catch (e) {
@@ -2922,7 +2940,7 @@
     clearTimeout(cloudWriteTimer);
     cloud = { token: '', gistId: '' };
     localStorage.removeItem(CLOUD_KEY);
-    cloudDirty = false;
+    setDirty(false);
     setCloudState('none');
   }
 
